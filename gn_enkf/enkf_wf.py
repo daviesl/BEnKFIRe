@@ -1,10 +1,10 @@
 import pyximport
 #from functools import partial
 #import multiprocessing as mp
-#from multiprocessing import Pool, cpu_count
-#from multiprocessing.pool import ApplyResult
-#from copy_reg import pickle
-#from types import MethodType
+from multiprocessing import Pool, cpu_count
+from multiprocessing.pool import ApplyResult
+from copy_reg import pickle
+from types import MethodType
 
 
 
@@ -174,15 +174,15 @@ class State(object):
 		#print 'Simulating ' + str(self.dt) + ' seconds'
 		self.iterate(self.dt)
 	def perturbTemp(self,b,p):
-		print "Perturbing temperature." # Bounds shape: " + str(b) + " Kernel shape: " + str(p)
+		#print "Perturbing temperature." # Bounds shape: " + str(b) + " Kernel shape: " + str(p)
 		self.T[b.minyi():b.maxyi(),b.minxi():b.maxxi()] += p
 	def perturbFuel(self,b,p):
-		print "Perturbing fuel." # Bounds shape: " + str(b) + " Kernel shape: " + str(p)
+		#print "Perturbing fuel." # Bounds shape: " + str(b) + " Kernel shape: " + str(p)
 		self.S[b.minyi():b.maxyi(),b.minxi():b.maxxi()] += p
 
 def doFx(s):
 	s.fx()
-	#return s
+	return s
 
 # pickle line required for multiprocessing
 #pickle(MethodType, _pickle_method, _unpickle_method)
@@ -427,7 +427,7 @@ class HotspotMeasurement(Measurement):
 			print "Hotspot perturbation"
 			rx = np.random.randint(0+border,cols - border)
 			ry = np.random.randint(0+border,rows - border)
-			state.perturbTemp(lb,np.random.normal(self.d()-self.hx(state),self.r(),1) * gkern2(rows,cols,ry,rx,nsig=2.5))
+			state.perturbTemp(lb,np.random.normal(self.d()-self.hx(state),self.r(),1) * gkern2(rows,cols,ry,rx,nsig=2.5) * 2.5 * 2 * math.pi)
 
 class PixelTempMeasurement(Measurement):
 	def __init__(self,centre,radius,temp,epoch):
@@ -449,14 +449,16 @@ class PixelTempMeasurement(Measurement):
 		return self.quality
 	def getLocalBounds(self,state):
 		# clip to local extents
-		localBounds = Rect2D.fromCircle(state.Extent.localPoint(self.centre,scale=abs(1.0/state.dx)),abs(self.radius/state.dx))
+		localBounds = Rect2D.fromCircle(state.Extent.localPoint(self.centre,scale=abs(1.0/state.dx)),abs(self.radius/state.dx)-1)
 		return localBounds.clipToInt(state.LocalExtent())
 	def perturbEnsembleState(self,state):
 		lb = self.getLocalBounds(state)
 		(cols,rows) = lb.shape()
 		cols = int(cols)
 		rows = int(rows)
-		state.perturbTemp(lb,ndimage.filters.gaussian_filter(np.random.normal(self.d()-self.hx(state),self.r(),(rows,cols)),2,mode='nearest'))
+		gn_radius = 2
+		variance = self.r() * gn_radius * 2 * math.pi
+		state.perturbTemp(lb,ndimage.filters.gaussian_filter(np.random.normal(self.d()-self.hx(state),variance,(rows,cols)),gn_radius,mode='nearest'))
 
 def sinScale(v):
 	return math.sin(np.clip(v,0,1)* math.pi / 2.0)
@@ -467,7 +469,7 @@ class PixelNBRMeasurement(Measurement):
 		self.centre = centre
 		self.radius = radius
 		self.epoch = epoch
-		self.quality = 0.1 # 10% std dev at a guess
+		self.quality = 0.4 # 40% std dev at a guess
 	def hx(self,state):
 		"""
 		return computed average fuel load from within bounds or mask
@@ -475,21 +477,23 @@ class PixelNBRMeasurement(Measurement):
 		localBounds = self.getLocalBounds(state)
 		# get nbr from state.S within localBounds
 		#return math.sin(hx_PixelNBR(state.S,localBounds) * math.pi / 2.0)
-		return sinScale(sinScale(hx_PixelNBR(state.S,localBounds)))
+		return sinScale(sinScale(hx_PixelNBR(state.S,localBounds) * 0.6 + 0.4))
 	def d(self):
 		return self.nbr
 	def r(self):
 		return self.quality
 	def getLocalBounds(self,state):
 		# clip to local extents
-		localBounds = Rect2D.fromCircle(state.Extent.localPoint(self.centre,scale=abs(1.0/state.dx)),abs(self.radius/state.dx))
+		localBounds = Rect2D.fromCircle(state.Extent.localPoint(self.centre,scale=abs(1.0/state.dx)),abs(self.radius/state.dx)-1)
 		return localBounds.clipToInt(state.LocalExtent())
 	def perturbEnsembleState(self,state):
 		lb = self.getLocalBounds(state)
 		(cols,rows) = lb.shape()
 		cols = int(cols)
 		rows = int(rows)
-		state.perturbFuel(lb,ndimage.filters.gaussian_filter(np.random.normal(self.d()-self.hx(state),self.r(),(rows,cols)),2,mode='nearest'))
+		gn_radius = 10
+		variance = self.r() * gn_radius * 2 * math.pi
+		state.perturbFuel(lb,ndimage.filters.gaussian_filter(np.random.normal(self.d()-self.hx(state),variance,(rows,cols)),gn_radius,mode='nearest'))
 		
 
 def sv2num(st):
@@ -747,12 +751,15 @@ def spawnSimulation(_sigmas,dt_total,dt_step,Tnoise):
 	#	s.fx((_nextEpoch - _epoch) * 86400,Tnoise)
 	for s in _sigmas:
 		s.setFxParams(dt_total,dt_step,Tnoise)
-	for s in _sigmas:
-		s.fx()
+	#for s in _sigmas:
+	#	s.fx()
 	# Try multiprocessing
-	#p = Pool(processes = cpu_count())
-	#results = p.imap(doFx,sigmas)
-	#del(sigmas)
+	p = Pool(processes = cpu_count())
+	results = p.imap(doFx,_sigmas)
+	for s in _sigmas:
+		del(s)
+	for s in results:
+		_sigmas.append(s)
 	#sigmas = [s for s in results]
 	# Or try threads
 	#tp = ThreadPool(len(_sigmas))
@@ -980,15 +987,14 @@ def mainloop():
 	
 	while _epoch >= 0:
 		_nextEpoch = getNextEpoch(_epoch) # get first epoch
-		if _epoch >= 0:
-			dt_seconds = (_nextEpoch - _epoch) * 86400
-			print 'Simulating for ' + str(dt_seconds) + ' seconds'
-			spawnSimulation(sigmas,dt_seconds,_dt,Tnoise)
-		_epoch = _nextEpoch
-	
-		# plot
-		plotState(X_mean_state,sigmas,_epoch)
 		del X_mean_state
+
+		dt_seconds = (_nextEpoch - _epoch) * 86400
+		_epoch = _nextEpoch
+		print 'Simulating for ' + str(dt_seconds) + ' seconds'
+		spawnSimulation(sigmas,dt_seconds,_dt,Tnoise)
+
+	
 			
 		# get first lot of measurements for this epoch and check for hotspots!
 		# For now don't use MPI, use a list of starting states
@@ -998,22 +1004,26 @@ def mainloop():
 		_Iter += 1
 		
 		X_mean_state = State(T=reduceAdd([s.T for s in sigmas])/N, S=reduceAdd([s.S for s in sigmas])/N, V=reduceAdd([s.V for s in sigmas])/N,Iter=_Iter)
+		# plot
+		plotState(X_mean_state,sigmas,_epoch)
 		# 4) let P = covariance = [sigma - x][sigma - x]^transposed, so P is NxN rank N. Use numpy.outer to computer outer product. OPTIONAL. P is huge.
 		# 5) For each sigma, for each observation
 		#        hx_sigma_obs = hx(sigma, observation)
 		
+		HX = np.zeros((num_meas,N))
+
 		# get measurements for epoch
 		meas_at_epoch = getMeasForEpoch(_epoch)
-		
 		num_meas = len(meas_at_epoch)
-		HX = np.zeros((num_meas,N))
+
+		for si in xrange(N):
+			for mi in xrange(num_meas):
+				#if np.random.randint(0,2) > 0:
+				meas_at_epoch[mi].perturbEnsembleState(sigmas[si])
 		
 		for si in xrange(N):
 			for mi in xrange(num_meas):
 				HX[mi,si] = meas_at_epoch[mi].hx(sigmas[si])
-				# also perturn half of the ensembles
-				#if np.random.randint(0,2) > 0:
-				meas_at_epoch[mi].perturbEnsembleState(sigmas[si])
 		
 		# get deviations of each ensemble member from the mean
 		HA = HX - np.mean(HX,axis=0) # should work because trailing axes have same dimension i.e. columns

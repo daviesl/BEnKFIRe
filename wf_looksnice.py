@@ -72,11 +72,11 @@ def iterate(T,S):
 	return (T1,S1)
 
 # The initial fraction of the forest occupied by trees.
-forest_fraction = 0.2
+forest_fraction = 0.4
 # Probability of new tree growth per empty cell, and of lightning strike.
 p, f = 0.05, 0.00001
 # Forest size (number of cells in x and y directions).
-nx, ny = 100, 100
+nx, ny = 200, 200
 # Initialize the forest grid.
 S  = np.zeros((ny, nx))
 S[1:ny-1, 1:nx-1] = np.random.randint(0, 2, size=(ny-2, nx-2))
@@ -107,7 +107,10 @@ animate.T = T
 
 # Interval between frames (ms).
 interval = 100
+Writer = animation.writers['ffmpeg']
+writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
 anim = animation.FuncAnimation(fig, animate, interval=interval)
+anim.save('sim.mp4',writer=writer)
 plt.show()
 
 

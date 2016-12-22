@@ -69,5 +69,8 @@ print i
 
 interval = 500
 # Bind our grid to the identifier X in the animate function's namespace.
+Writer = animation.writers['ffmpeg']
+writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
 anim = animation.FuncAnimation(fig, animate, interval=interval)
+anim.save('temp.mp4',writer=writer)
 plt.show()

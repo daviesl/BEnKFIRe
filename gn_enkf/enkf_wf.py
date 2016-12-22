@@ -655,16 +655,20 @@ def mainloop():
 		HX = np.zeros((num_meas,N))
 
 		def rand_polar2XY(rsig):
-			theta = np.random.uniform(0,2*math.pi,1)
+			theta = np.random.uniform(math.pi - math.pi * 0.25,math.pi - + math.pi * 0.25,1)
 			r = np.random.uniform(0,rsig,1)
-			return r * np.array([np.cos(theta), np.sin(theta)])
+			return np.array([r * np.cos(theta), r * np.sin(theta)]).flatten()
 			
 
 
 		for si in xrange(N):
 			# perturb wind velocity
 			#sigmas[si].V = np.clip(sigmas[si].V+np.random.uniform(-WF.Vsigma,WF.Vsigma,2),-2*WF.Vsigma,2*WF.Vsigma)
-			sigmas[si].V += rand_polar2XY(WF.Vsigma)
+			print "Broadcast V " + str(sigmas[si].V)
+			o = rand_polar2XY(WF.Vsigma)
+			print "Broadcast o " + str(o)
+			#sigmas[si].V += rand_polar2XY(WF.Vsigma)
+			sigmas[si].V += o
 			mag = np.linalg.norm(sigmas[si].V,ord=2)
 			if mag > WF.Vsigma*2:
 				sigmas[si].V *= WF.Vsigma*2.0/mag

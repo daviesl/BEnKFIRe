@@ -20,7 +20,7 @@ import gdal
 import sys
 import pickle
 
-Vsigma = 0.0001
+Vsigma = 0.1
 # Constants from Mendel paper
 _k = 2.1360e-1 # m^2 s^-1 K^-3
 _A = 1.8793e2 # K s^-1 # was e2
@@ -48,17 +48,24 @@ interval = 1
 #test_extents_N=(-3676644,-3683126)
 
 #_T_stddev = 20 # degrees (not used afaik)
-_Ta_stddev = 80
+_Ta_stddev = 100
 Tnoise = 5.0 # per ensemble member noise added at start of each simulation run
 
 class State(object):
 	def __init__(self, **kwds):
 		self.__dict__.update(kwds)
+	def update(self,new_s):
+		#self.T = new_s.T
+		#self.S = new_s.S
+		#self.V = new_s.V
+		for key,val in new_s.__dict__.items():
+			delattr(self,key)
+			setattr(self,key,val)
 	def LocalExtent(self):
 		(w,h) = self.Extent.shape()
 		w /= self.dx
 		h /= self.dx
-		return Rect2D(0,w,0,h)
+		return Rect2D(0,int(w),0,int(h))
 	def iterate(self,dt):
 		"""Iterate the forest according to the forest-fire rules. No wind term."""
 		(T,S,V) = (self.T,self.S,self.V) # expand
@@ -72,7 +79,7 @@ class State(object):
 		#cy_laplacian(T,laplace_T,_dx,_Ta)
 	
 		[grad_x_T,grad_y_T] = np.gradient(T)
-		[vx,vy] = V * dt
+		[vx,vy] = V * dt / _dx
 	
 		SexpB_T = ne.evaluate('S * exp(-_B / (T - _Tal))')
 		self.T = ne.evaluate('T + (kd * laplace_T + vx * grad_x_T + vy * grad_y_T + dt * _A * SexpB_T - dt * _A * _C * (T - _Tal))')
@@ -90,7 +97,7 @@ class State(object):
 		# split x into T,S,V
 		# add noise to the starting model to increase the ensemble variance
 		(ny,nx) = self.T.shape
-		self.T += ndimage.filters.gaussian_filter(np.random.normal(0,self.Tnoise,(ny,nx)),2,mode='nearest')
+		#self.T += ndimage.filters.gaussian_filter(np.random.normal(0,self.Tnoise,(ny,nx)),2,mode='nearest')
 		np.clip(self.V,-2*Vsigma, 2*Vsigma,out=self.V)
 		np.clip(self.T,_Talclip,1000,out=self.T)
 		# propagate by dt
@@ -218,11 +225,17 @@ class Rect2D:
 	def topLeft(self):
 		return Point2D(self.minx, self.miny)
 	def clipTo(self,r):
-		return Rect2D(max(self.minx,r.minx),min(self.maxx,r.maxx),max(self.miny,r.miny),min(self.maxy,r.maxy))
+		if self.maxx < r.minx or self.minx > r.maxx or self.maxy < r.miny or self.miny > r.maxy:
+			return Rect2D(0,0,0,0)
+		else:
+			return Rect2D(max(self.minx,r.minx),min(self.maxx,r.maxx),max(self.miny,r.miny),min(self.maxy,r.maxy))
 	def clipToInt(self,r):
-		return Rect2D(max(self.minxi(),r.minxi()),min(self.maxxi(),r.maxxi()),max(self.minyi(),r.minyi()),min(self.maxyi(),r.maxyi()))
+		if self.maxxi() < r.minxi() or self.minxi() > r.maxxi() or self.maxyi() < r.minyi() or self.minyi() > r.maxyi():
+			return Rect2D(0,0,0,0)
+		else:
+			return Rect2D(max(self.minxi(),r.minxi()),min(self.maxxi(),r.maxxi()),max(self.minyi(),r.minyi()),min(self.maxyi(),r.maxyi()))
 	def __str__(self):
-		return "Min (" + str(self.minx) + ", " + str(self.maxx) + "), Max (" + str(self.miny) + ", " + str(self.maxy) + ")"
+		return "X (" + str(self.minx) + ", " + str(self.maxx) + "), Y (" + str(self.miny) + ", " + str(self.maxy) + ")"
 	@classmethod
 	def fromCircle(cls,centre,radius):
 		return cls(centre.x - radius, centre.x + radius, centre.y - radius, centre.y + radius)
@@ -295,10 +308,16 @@ def GetExtent(gt,cols,rows):
 		@rtype:	C{[float,...,float]}
 		@return:   coordinates of each corner
 	'''
-	return Rect2D(gt[0],gt[0]+(cols*gt[1])+(rows*gt[2]), gt[3], gt[3]+(cols*gt[4])+(rows*gt[5]))
+	#return Rect2D(gt[0],gt[0]+(cols*gt[1])+(rows*gt[2]), gt[3], gt[3]+(cols*gt[4])+(rows*gt[5]))
+	#print "getting extent using origin (" + str(gt[0]) + "," + str(gt[3]) + ") and pix size (" + str(gt[1]) + "," + str(gt[5]) + ")"
+	x1 = gt[0]
+	x2 = gt[0]+(cols*gt[1])
+	y1 = gt[3]
+	y2 = gt[3]+(rows*gt[5])
+	return Rect2D(min(x1,x2),max(x1,x2), min(y1,y2),max(y1,y2))
 
 def GetPixelSize(gt):
-	return Point2D(gt[1],gt[5])
+	return Point2D(abs(gt[1]),abs(gt[5]))
 
 def hx(T,S,V,obstype):
 	"""
@@ -359,12 +378,12 @@ class HotspotMeasurement(Measurement):
 		if temp > 0:
 			self.temp = temp
 			if confidence > 0:
-				self.quality = 0.1 + 0.05 * (100 - confidence) # / 2.69?
+				self.quality = (101 - confidence) # / 2.69?
 			else:
-				self.quality = 1
+				self.quality = 20
 		else:
-			self.temp = 600 # ignition?
-			self.quality = 2
+			self.temp = 450 # ignition?
+			self.quality = 150
 		self.centre = centre
 		self.radius = radius
 		self.epoch = epoch
@@ -380,10 +399,10 @@ class HotspotMeasurement(Measurement):
 		return max(self.temp,_Talclip)
 	def r(self):
 		return self.quality
-	def getLocalBounds(self,state):
+	def getLocalBounds(self,state,expand=0):
 		#print "Local bounds " + str(localBounds)
 		# clip to local extents
-		localBounds = Rect2D.fromCircle(state.Extent.localPoint(self.centre,scale=abs(1.0/state.dx)),self.radius/state.dx+1)
+		localBounds = Rect2D.fromCircle(state.Extent.localPoint(self.centre,scale=abs(1.0/state.dx)),self.radius/state.dx+expand)
 		return localBounds.clipToInt(state.LocalExtent())
 	def perturbEnsembleState(self,state):
 		lb = self.getLocalBounds(state)
@@ -396,9 +415,10 @@ class HotspotMeasurement(Measurement):
 			ry = np.random.randint(0+border,rows - border)
 			gk_radius = 4
 			#gk = np.random.normal(self.d()-hx_PixelTemp(state.T,lb),self.r(),1) * gkern2(rows,cols,ry,rx,nsig=gk_radius) * gk_radius * 2 * math.pi
-			gk = np.random.normal(self.d(),self.r(),1) * gkern2(rows,cols,ry,rx,nsig=gk_radius) * gk_radius * 2 * math.pi
-			print "Hotspot perturbation by " + str(np.max(gk)) + " degrees"
-			state.perturbTempMax(lb,gk)
+			gk = gkern2(rows,cols,ry,rx,nsig=gk_radius)
+			scalefactor = np.random.normal(self.d(),self.r(),1) * gk_radius * 8 * math.pi
+			print "Hotspot perturbation by " + str(scalefactor) + " degrees on kernel " + str(np.max(gk)) + " given data " + str(self.d())
+			state.perturbTempMax(lb,gk*scalefactor)
 
 class PixelTempMeasurement(Measurement):
 	def __init__(self,centre,radius,temp,epoch):
@@ -406,7 +426,7 @@ class PixelTempMeasurement(Measurement):
 		self.centre = centre
 		self.radius = radius
 		self.epoch = epoch
-		self.quality = 20 # degrees std dev at a guess
+		self.quality = 0.1 # degrees std dev at a guess
 	def hx(self,state):
 		"""
 		return computed average temp from within bounds or mask
@@ -418,18 +438,21 @@ class PixelTempMeasurement(Measurement):
 		return max(self.temp,_Talclip)
 	def r(self):
 		return self.quality
-	def getLocalBounds(self,state):
+	def getLocalBounds(self,state,expand=0):
 		# clip to local extents
-		localBounds = Rect2D.fromCircle(state.Extent.localPoint(self.centre,scale=abs(1.0/state.dx)),abs(self.radius/state.dx)+1)
+		localBounds = Rect2D.fromCircle(state.Extent.localPoint(self.centre,scale=abs(1.0/state.dx)),abs(self.radius/state.dx)+expand)
 		return localBounds.clipToInt(state.LocalExtent())
 	def perturbEnsembleState(self,state):
-		lb = self.getLocalBounds(state)
+		lb = self.getLocalBounds(state,-2)
 		(cols,rows) = lb.shape()
 		cols = int(cols)
 		rows = int(rows)
-		gn_radius = 5
-		variance = self.r() * gn_radius * 2 * math.pi
-		state.perturbTemp(lb,ndimage.filters.gaussian_filter(np.random.normal(self.d()-self.hx(state),variance,(rows,cols)),gn_radius,mode='nearest'))
+		gn_radius = 4
+		variance = self.r() * gn_radius * 2 * math.sqrt(math.pi)
+		#state.perturbTemp(lb,ndimage.filters.gaussian_filter(np.random.normal(self.d()-self.hx(state),variance,(rows,cols)),gn_radius,mode='nearest'))
+		#state.perturbTempMax(lb,ndimage.filters.gaussian_filter(np.random.normal(self.d(),variance,(rows,cols)),gn_radius,mode='nearest'))
+		nz = ndimage.filters.gaussian_filter(np.random.normal(self.d(),variance,(rows,cols)),gn_radius,mode='nearest')
+		state.perturbTempMax(lb,nz)
 
 def sinScale(v):
 	return math.sin(np.clip(v,0,1)* math.pi / 2.0)
@@ -448,20 +471,65 @@ class PixelNBRMeasurement(Measurement):
 		localBounds = self.getLocalBounds(state)
 		# get nbr from state.S within localBounds
 		#return math.sin(hx_PixelNBR(state.S,localBounds) * math.pi / 2.0)
-		return sinScale(sinScale(hx_PixelNBR(state.S,localBounds) * 0.5 + 0.5))
+		#return sinScale(sinScale(hx_PixelNBR(state.S,localBounds) * 0.5 + 0.5))
+		return hx_PixelNBR(state.S,localBounds)
 	def d(self):
-		return self.nbr
+		#return self.nbr
+		return sinScale(self.nbr)
 	def r(self):
 		return self.quality
-	def getLocalBounds(self,state):
+	def getLocalBounds(self,state,expand=0):
 		# clip to local extents
-		localBounds = Rect2D.fromCircle(state.Extent.localPoint(self.centre,scale=abs(1.0/state.dx)),abs(self.radius/state.dx)+1)
+		localBounds = Rect2D.fromCircle(state.Extent.localPoint(self.centre,scale=abs(1.0/state.dx)),abs(self.radius/state.dx)+expand)
 		return localBounds.clipToInt(state.LocalExtent())
 	def perturbEnsembleState(self,state):
-		lb = self.getLocalBounds(state)
+		lb = self.getLocalBounds(state,-2)
 		(cols,rows) = lb.shape()
 		cols = int(cols)
 		rows = int(rows)
-		gn_radius = 5
-		variance = self.r() * gn_radius * 2 * math.pi
+		gn_radius = 4
+		variance = self.r() * gn_radius * 2 * math.sqrt(math.pi)
 		state.perturbFuel(lb,ndimage.filters.gaussian_filter(np.random.normal(self.d()-self.hx(state),variance,(rows,cols)),gn_radius,mode='nearest'))
+
+class PixelDNBRMeasurement(Measurement):
+	def __init__(self,centre,radius,dnbr,stddev,epoch):
+		self.dnbr = dnbr
+		self.stddev = stddev
+		self.centre = centre
+		self.radius = radius
+		self.epoch = epoch
+		self.quality = 0.2 # 20% std dev at a guess
+	def hx(self,state):
+		"""
+		return computed average fuel load from within bounds or mask
+		"""
+		localBounds = self.getLocalBounds(state)
+		# get nbr from state.S within localBounds
+		#return math.sin(hx_PixelNBR(state.S,localBounds) * math.pi / 2.0)
+		#return sinScale(sinScale(hx_PixelNBR(state.S,localBounds) * 0.5 + 0.5))
+		return hx_HotspotTemp(state.T,localBounds)
+	def d(self):
+		#return self.nbr
+		return self.dnbr
+	def r(self):
+		return self.stddev
+	def getLocalBounds(self,state,expand=0):
+		# clip to local extents
+		localBounds = Rect2D.fromCircle(state.Extent.localPoint(self.centre,scale=abs(1.0/state.dx)),abs(self.radius/state.dx)+expand)
+		return localBounds.clipToInt(state.LocalExtent())
+	def perturbEnsembleState(self,state):
+		lb = self.getLocalBounds(state,-2)
+		(cols,rows) = lb.shape()
+		cols = int(cols)
+		rows = int(rows)
+		#gn_radius = 16
+		#variance = self.r() * gn_radius * 2 * math.sqrt(math.pi)
+		#temp = self.d() #-self.hx(state)
+		#state.perturbTempMax(lb,ndimage.filters.gaussian_filter(np.random.random(temp-variance,temp+variance,(rows,cols)),gn_radius,mode='nearest'))
+		border = 1
+		rx = np.random.randint(0+border,cols - border)
+		ry = np.random.randint(0+border,rows - border)
+		gk_radius = 8
+		gk = gkern2(rows,cols,ry,rx,nsig=gk_radius)
+		scalefactor = np.random.uniform(self.d(),self.r(),1) / np.amax(gk)
+		state.perturbTempMax(lb,gk*scalefactor)

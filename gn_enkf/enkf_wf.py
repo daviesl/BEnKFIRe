@@ -2,7 +2,7 @@ import pyximport
 #from functools import partial
 #import multiprocessing as mp
 from multiprocessing import Pool, cpu_count
-from multiprocessing.pool import ApplyResult
+#from multiprocessing.pool import ApplyResult
 #from copy_reg import pickle
 #from types import MethodType
 
@@ -164,7 +164,7 @@ def plotState2(s,s0,e):
 	plt.close()
 
 def plotState(s,sigmas_,e):
-	fig = plt.figure(figsize=(9, 9),dpi=72)
+	fig = plt.figure(figsize=(12, 12),dpi=72)
 	N_ = len(sigmas_)
 	sqrtN_ = int(math.sqrt(N_))
 	gs = gridspec.GridSpec(sqrtN_ + 1,2*sqrtN_) #, width_ratios=[1,1])
@@ -228,10 +228,10 @@ def addMeas(epoch,meas):
 def sortMeas():
 	global sorted_epochs
 	sorted_epochs = sorted(all_meas_dict.keys()) # global
-	print len(all_meas_dict.keys())
+	#print len(all_meas_dict.keys())
 	#all_meas = OrderedDict(sorted(all_meas, key=lambda m: m[0]))
-	for e in sorted_epochs:
-		all_meas.append((e,all_meas_dict[e]))
+	#for e in sorted_epochs:
+	#	all_meas.append((e,all_meas_dict[e]))
 
 def getNextEpoch(currentEpoch):
 	global sorted_epochs
@@ -308,26 +308,29 @@ def doFx(s):
 	with open(spath, 'wb') as f:
 		p = pickle.Pickler(f,protocol=pickle.HIGHEST_PROTOCOL)
 		p.dump(s)
-	del(s)
+		del(p)
+	#del(s)
 	call(["./sim_wf.py",spath])
 	with open(spath, 'rb') as f:
 		up = pickle.Unpickler(f)
-		s = up.load() #stations
+		s.update(up.load()) #stations
+		#s = up.load()
+		del(up)
 	os.remove(spath)
-	return s
+	#return s
 	
 
 #@profile
-def spawnSimulation(_sigmas,dt_total,dt_step,Tnoise):
+def spawnSimulation(tp,_sigmas,dt_total,dt_step,Tnoise):
 	for i,s in enumerate(_sigmas):
 		s.setFxParams(i,dt_total,dt_step,Tnoise)
 	#for s in _sigmas:
 	#	s.fx()
 	# Try multiprocessing
-	p = Pool(processes = cpu_count())
-	_sigmas = p.map(doFx,_sigmas)
-	p.close()
-	p.join()
+	#p = Pool(processes = cpu_count())
+	#_sigmas = p.map(doFx,_sigmas)
+	#p.close()
+	#p.join()
 	#results = p.imap(doFx,_sigmas)
 	#for s in _sigmas:
 	#	del(s)
@@ -336,16 +339,14 @@ def spawnSimulation(_sigmas,dt_total,dt_step,Tnoise):
 	
 	#sigmas = [s for s in results]
 	# Or try threads
-	#tp = ThreadPool(len(_sigmas))
-	#tp.map(doFx,_sigmas)
-	#tp.wait_completion()
-	#del(tp)
+	tp.map(doFx,_sigmas)
+	tp.wait_completion()
 
 def mainloop():
 	
 	# set first epoch to max
 	_epoch = 999999999999
-	N = 16	
+	N = 16
 	# min/max E, min/max N
 	#test_extents = Rect2D(-1487906,-1480756,-3683126,-3676644)
 	# one pixel below
@@ -409,7 +410,7 @@ def mainloop():
 					a = np.array(r.GetRasterBand(1).ReadAsArray())
 					tr = r.GetGeoTransform()
 					#print 'loaded'
-					H8_NBR.append( (utc2num('%s-%s-%02dT%02d:%02d:00Z'%(y,m,d,hour,minute)),tr,r,a) )
+					H8_NBR.append( (utc2num('%s-%s-%02dT%02d:%02d:00Z'%(y,m,d,hour,minute)),tr,r,a,None) )
 					#i += 1
 				except AttributeError, e:
 					print e
@@ -491,13 +492,76 @@ def mainloop():
 	# subtract 20 minutes from _epoch to get pixels before hotspot
 	_epoch -= 2 * 600.0 / 86400
 	
+	# sort the measurements and get the epochs of hotspots
+	sortMeas()
+
+	#H8_B07_meas = OrderedDict(sorted(H8_B07_meas, key=lambda m: m[0]))
+	last_a = []
+	last_e = 99999
+	for i,(e,tr,r,a,dnbr) in enumerate(H8_NBR):
+		if i < (len(H8_NBR) - 1) and np.isfinite(a).any():
+			(next_e,next_tr,next_r,next_a,next_dnbr) = H8_NBR[i+1]
+			# don't use last_e for now, but maybe use it as a threshold, i.e. if last_e < timelimit: add dnbr
+			epoch_diff = next_e - e
+			if epoch_diff < (1300.0 / 86400):
+				# compute dnbr
+				dnbr = np.clip(a-next_a,0,2)
+				dnbr /= np.amax(dnbr)
+				dnbr_scaled = np.zeros(dnbr.shape)
+				dnbr_quality = np.ones(dnbr.shape) * 1000
+				# scale by a hotspot map
+				# first get the epoch for dnbr and search for hotspots within the ten minute interval minus 5 minutes.
+				search_e = e - (300.0 / 86400.0)
+				mfe = []
+				search_e = getNextEpoch(search_e)
+				#print "searching for hotspots at " + str(search_e)
+				while search_e < next_e:
+					mfe.extend(getMeasForEpoch(search_e))
+					search_e = getNextEpoch(search_e)
+				if len(mfe) > 0:
+					print "Found hotspot measurmeents for DNBR"
+					# get hotspot measurements
+					cols = r.RasterXSize
+					rows = r.RasterYSize
+					rasterbounds = WF.GetExtent(tr,cols,rows)
+					#print "raster bound region " + str(rasterbounds)
+					localbounds = WF.Rect2D(0,cols,0,rows)
+					#print "local bound region " + str(localbounds)
+					pixSize = WF.GetPixelSize(tr)
+					trans = WF.RectTransformation2D(rasterbounds,test_extents,scale=(1.0/WF._dx))
+					num_meas = len(mfe)
+					# find any hotspots, and scale the dnbr pixels to those hotspots
+					# no hotspots means no pixels
+					for mi in xrange(num_meas):
+						scale_region_centre = rasterbounds.localPoint(mfe[mi].centre,(1.0/pixSize.x))
+						#print "centre = " + str(mfe[mi].centre)
+						#print "scale_centre = " + str(scale_region_centre)
+						scale_region = WF.Rect2D.fromCircle(scale_region_centre,mfe[mi].radius / pixSize.x)
+						#print "Scale region " + str(scale_region)
+						scale_region = scale_region.clipToInt(localbounds)
+						#print "Scale region " + str(scale_region)
+						if scale_region.area() > 0:
+							#print "Adding scaled DNBR"
+							dnbr_quality[scale_region.minyi():scale_region.maxyi(),scale_region.minxi():scale_region.maxxi()] = mfe[mi].r() #fixme for overlapping hotspots
+							dnbr_scaled[scale_region.minyi():scale_region.maxyi(),scale_region.minxi():scale_region.maxxi()] = dnbr[scale_region.minyi():scale_region.maxyi(),scale_region.minxi():scale_region.maxxi()] * mfe[mi].d() / np.amax(dnbr[scale_region.minyi():scale_region.maxyi(),scale_region.minxi():scale_region.maxxi()])
+					for col in xrange(cols):
+						for row in xrange(rows):
+							# Transform from raster coordinate system to grid coordinate system
+							gridPixPt = trans.TransformLocalPointToLocalPoint(WF.Point2D(col*pixSize.x,row*pixSize.y))
+							if dnbr_scaled[row][col] > 0 and trans.getTargetLocalRect().inside(gridPixPt):
+								print "Adding DNBR measurement, temperature " + str(dnbr_scaled[row][col])
+								addMeas(e,WF.PixelDNBRMeasurement(WF.Point2D(rasterbounds.minx+(col+0.5)*pixSize.x,rasterbounds.miny+(row+0.5)*pixSize.y),pixSize.x*0.5,dnbr_scaled[row][col],dnbr_quality[row][col],e))
+					
+			
+				#H8_NBR[i] = (e,tr,r,a,dnbr)
+			
 	for e,tr,r,a in H8_B07:
 		#_epoch = min(e,_epoch)
 		if e >= _epoch:
 			cols = r.RasterXSize
 			rows = r.RasterYSize
-			print "Cols = " + str(cols) + ' rows = ' + str(rows)
-			print "A size = " + str(a.shape)
+			#print "Cols = " + str(cols) + ' rows = ' + str(rows)
+			#print "A size = " + str(a.shape)
 			rasterbounds = WF.GetExtent(tr,cols,rows)
 			#print "Raster bounds " + str(rasterbounds)
 			pixSize = WF.GetPixelSize(tr)
@@ -515,16 +579,14 @@ def mainloop():
 						# FIXME confirm that col,row referencing order is correct visually
 						#print 'Adding pixel meas at ' + str(gridPixPt.x) + ', ' + str(gridPixPt.y)
 						#addMeas(e,PixelTempMeasurement(gridPixPt,trans.scale*0.5,a[col][row],e))
-						addMeas(e,WF.PixelTempMeasurement(WF.Point2D(rasterbounds.minx+col*pixSize.x,rasterbounds.miny+row*pixSize.y),pixSize.x*0.5,a[row][col],e))
+						addMeas(e,WF.PixelTempMeasurement(WF.Point2D(rasterbounds.minx+(col+0.5)*pixSize.x,rasterbounds.miny+(row+0.5)*pixSize.y),pixSize.x*0.5,a[row][col],e))
 			 
-	#H8_B07_meas = OrderedDict(sorted(H8_B07_meas, key=lambda m: m[0]))
-	
-	for e,tr,r,a in H8_NBR:
+	for i,(e,tr,r,a,dnbr) in enumerate(H8_NBR):
 		if e >= _epoch:
 			cols = r.RasterXSize
 			rows = r.RasterYSize
-			print "NBR Cols = " + str(cols) + ' rows = ' + str(rows)
-			print "NBR A size = " + str(a.shape)
+			#print "NBR Cols = " + str(cols) + ' rows = ' + str(rows)
+			#print "NBR A size = " + str(a.shape)
 			rasterbounds = WF.GetExtent(tr,cols,rows)
 			#print "Raster bounds " + str(rasterbounds)
 			pixSize = WF.GetPixelSize(tr)
@@ -540,8 +602,8 @@ def mainloop():
 					#print 'Testing bounds of pixel meas at ' + str(gridPixPt.x) + ', ' + str(gridPixPt.y)
 					if trans.getTargetLocalRect().inside(gridPixPt) and np.isfinite(a).any():
 						# FIXME confirm that col,row referencing order is correct visually
-						#print 'Adding pixel meas at ' + str(gridPixPt.x) + ', ' + str(gridPixPt.y)
-						addMeas(e,WF.PixelNBRMeasurement(WF.Point2D(rasterbounds.minx+col*pixSize.x,rasterbounds.miny+row*pixSize.y),pixSize.x*0.5,a[row][col],e))
+						print 'Adding NBR meas at ' + str(gridPixPt.x) + ', ' + str(gridPixPt.y)
+						addMeas(e,WF.PixelNBRMeasurement(WF.Point2D(rasterbounds.minx+(col+0.5)*pixSize.x,rasterbounds.miny+(row+0.5)*pixSize.y),pixSize.x*0.5,a[row][col],e))
 	
 	sortMeas()
 	print "Number of epochs in sorted list = " + str(len(sorted_epochs))
@@ -556,6 +618,8 @@ def mainloop():
 	sigmas = [WF.State.generateState(test_extents,WF._Ta,WF._Ta_stddev,WF._dx,i,N,WF.forest_fraction,ny,nx) for i in range(N)]
 	
 		
+	tp = ThreadPool(len(sigmas))
+
 	X_mean_state = WF.State(T=reduceAdd([s.T for s in sigmas])/N, S=reduceAdd([s.S for s in sigmas])/N, V=reduceAdd([s.V for s in sigmas])/N,Iter=_Iter)
 	#makeSimPlotWindow(X_mean_state, sigmas[0])
 	
@@ -566,7 +630,7 @@ def mainloop():
 		dt_seconds = (_nextEpoch - _epoch) * 86400
 		_epoch = _nextEpoch
 		print 'Simulating for ' + str(dt_seconds) + ' seconds'
-		spawnSimulation(sigmas,dt_seconds,WF._dt,WF.Tnoise)
+		spawnSimulation(tp,sigmas,dt_seconds,WF._dt,WF.Tnoise)
 
 	
 			
@@ -590,11 +654,27 @@ def mainloop():
 		
 		HX = np.zeros((num_meas,N))
 
+		def rand_polar2XY(rsig):
+			theta = np.random.uniform(0,2*math.pi,1)
+			r = np.random.uniform(0,rsig,1)
+			return r * np.array([np.cos(theta), np.sin(theta)])
+			
+
 
 		for si in xrange(N):
+			# perturb wind velocity
+			#sigmas[si].V = np.clip(sigmas[si].V+np.random.uniform(-WF.Vsigma,WF.Vsigma,2),-2*WF.Vsigma,2*WF.Vsigma)
+			sigmas[si].V += rand_polar2XY(WF.Vsigma)
+			mag = np.linalg.norm(sigmas[si].V,ord=2)
+			if mag > WF.Vsigma*2:
+				sigmas[si].V *= WF.Vsigma*2.0/mag
 			for mi in xrange(num_meas):
 				#if np.random.randint(0,2) > 0:
-				meas_at_epoch[mi].perturbEnsembleState(sigmas[si])
+				cn = meas_at_epoch[mi].__class__.__name__
+				#print "Checking meas " + cn
+				if cn == 'PixelDNBRMeasurement':
+					print 'Perturbing ensemble'
+					meas_at_epoch[mi].perturbEnsembleState(sigmas[si])
 		
 		for si in xrange(N):
 			for mi in xrange(num_meas):

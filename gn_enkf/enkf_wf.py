@@ -304,7 +304,8 @@ from subprocess import call
 def doFx(s):
 	#s.fx()
 	#return s
-	spath = '/g/data/r78/lsd547/scratch/state_' + str(s.file_id)
+	#spath = '/g/data/r78/lsd547/scratch/state_' + str(s.file_id)
+	spath = '/local/r78/enkf_scratch_state_' + str(s.file_id)
 	with open(spath, 'wb') as f:
 		p = pickle.Pickler(f,protocol=pickle.HIGHEST_PROTOCOL)
 		p.dump(s)
@@ -627,6 +628,26 @@ def mainloop():
 		_nextEpoch = getNextEpoch(_epoch) # get first epoch
 		del X_mean_state
 
+		# get measurements for epoch
+		meas_at_epoch = getMeasForEpoch(_epoch)
+		num_meas = len(meas_at_epoch)
+
+		for si in xrange(N):
+			# perturb wind velocity
+			#sigmas[si].V = WF.rand_polar2XY(sigmas[si].V,WF.Vsigma)
+			#sigmas[si].V = WF.rand_wind(sigmas[si].V,WF.Vsigma)
+			sigmas[si].V = WF.rand_wind(sigmas[si].V)
+			#mag = np.linalg.norm(sigmas[si].V,ord=2)
+			#if mag > WF.Vsigma*2:
+			#	sigmas[si].V *= WF.Vsigma*2.0/mag
+			for mi in xrange(num_meas):
+				#if np.random.randint(0,2) > 0:
+				cn = meas_at_epoch[mi].__class__.__name__
+				#print "Checking meas " + cn
+				if cn == 'PixelDNBRMeasurement':
+					print 'Perturbing ensemble'
+					meas_at_epoch[mi].perturbEnsembleState(sigmas[si])
+
 		dt_seconds = (_nextEpoch - _epoch) * 86400
 		_epoch = _nextEpoch
 		print 'Simulating for ' + str(dt_seconds) + ' seconds'
@@ -654,31 +675,9 @@ def mainloop():
 		
 		HX = np.zeros((num_meas,N))
 
-		def rand_polar2XY(rsig):
-			theta = np.random.uniform(math.pi - math.pi * 0.25,math.pi - + math.pi * 0.25,1)
-			r = np.random.uniform(0,rsig,1)
-			return np.array([r * np.cos(theta), r * np.sin(theta)]).flatten()
 			
 
 
-		for si in xrange(N):
-			# perturb wind velocity
-			#sigmas[si].V = np.clip(sigmas[si].V+np.random.uniform(-WF.Vsigma,WF.Vsigma,2),-2*WF.Vsigma,2*WF.Vsigma)
-			print "Broadcast V " + str(sigmas[si].V)
-			o = rand_polar2XY(WF.Vsigma)
-			print "Broadcast o " + str(o)
-			#sigmas[si].V += rand_polar2XY(WF.Vsigma)
-			sigmas[si].V += o
-			mag = np.linalg.norm(sigmas[si].V,ord=2)
-			if mag > WF.Vsigma*2:
-				sigmas[si].V *= WF.Vsigma*2.0/mag
-			for mi in xrange(num_meas):
-				#if np.random.randint(0,2) > 0:
-				cn = meas_at_epoch[mi].__class__.__name__
-				#print "Checking meas " + cn
-				if cn == 'PixelDNBRMeasurement':
-					print 'Perturbing ensemble'
-					meas_at_epoch[mi].perturbEnsembleState(sigmas[si])
 		
 		for si in xrange(N):
 			for mi in xrange(num_meas):

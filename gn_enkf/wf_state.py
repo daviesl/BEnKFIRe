@@ -21,6 +21,12 @@ import sys
 import pickle
 
 Vsigma = 0.1
+Vmean  = np.array([-0.15,0.0])
+Vmagbound = 0.25
+Vmean_mag = 0.2
+Vmean_dir = 1.5 * math.pi
+Vsigma_mag = 0.1
+Vsigma_dir = 0.35 * math.pi
 # Constants from Mendel paper
 _k = 2.1360e-1 # m^2 s^-1 K^-3
 _A = 1.8793e2 # K s^-1 # was e2
@@ -50,6 +56,26 @@ interval = 1
 #_T_stddev = 20 # degrees (not used afaik)
 _Ta_stddev = 100
 Tnoise = 5.0 # per ensemble member noise added at start of each simulation run
+
+def rand_polar2XY(rmin,rmax):
+	theta = np.random.uniform(math.pi - math.pi * 0.35,math.pi - + math.pi * 0.35,1)
+	r = np.random.uniform(rmin,rmax,1)
+	return np.array([r * np.cos(theta), r * np.sin(theta)]).flatten()
+
+def rand_wind_old(vmean,vsigma):
+	v2 = vmean + np.random.normal(0,vsigma,2)
+	mag = np.linalg.norm(v2,ord=2)
+	if mag > Vmagbound:
+		v2 *= Vmagbound / mag
+	return v2
+
+def rand_wind(curV):
+	cur_theta = math.fmod((math.atan2(curV[1],curV[0]) + math.pi * 2), math.pi * 2)
+	cur_mag = np.linalg.norm(curV,ord=2)
+	new_theta_sig = max(Vsigma_dir * math.cos(Vmean_dir - cur_theta),0.001)
+	theta = np.random.normal(cur_theta,new_theta_sig,1)
+	r = np.clip(np.random.normal(cur_mag,Vsigma_mag,1),0,Vmagbound)
+	return np.array([r * np.cos(theta), r * np.sin(theta)]).flatten()
 
 class State(object):
 	def __init__(self, **kwds):
@@ -98,7 +124,7 @@ class State(object):
 		# add noise to the starting model to increase the ensemble variance
 		(ny,nx) = self.T.shape
 		#self.T += ndimage.filters.gaussian_filter(np.random.normal(0,self.Tnoise,(ny,nx)),2,mode='nearest')
-		np.clip(self.V,-2*Vsigma, 2*Vsigma,out=self.V)
+		#np.clip(self.V,-Vbounds, 2*Vsigma,out=self.V)
 		np.clip(self.T,_Talclip,1000,out=self.T)
 		# propagate by dt
 		while self.dt > self.step_dt:
@@ -157,8 +183,10 @@ class State(object):
 		print "Epicentre " + str(localec)
 		#cls.randomBump(T,200,localec.x,localec.y)
 	
+		#V += np.clip(np.random.normal(0,Vsigma,2),-2*Vsigma, 2*Vsigma)
 		#V = np.array([0.0,0.0])
-		V = np.clip(np.random.normal(0,Vsigma,2),-2*Vsigma, 2*Vsigma)
+		#V += rand_polar2XY(0,2*Vsigma)
+		V = rand_wind(Vmean) #,Vsigma)
 		#return State(T=T,S=S,V=V,Extent=extents,dx=dx,origin=extents.topLeft())
 		return cls(T=T,S=S,V=V,Extent=extents,dx=dx)
 

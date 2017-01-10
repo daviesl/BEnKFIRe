@@ -8,7 +8,8 @@ import math
 import time
 import numpy as np
 pyximport.install(setup_args={'include_dirs':[np.get_include()]})
-from cylaplace_9pts import cy_laplacian
+#from cylaplace_9pts import cy_laplacian
+from cylaplace import cy_laplacian
 import numexpr as ne
 from scipy import ndimage
 import matplotlib.pyplot as plt
@@ -20,13 +21,19 @@ import gdal
 import sys
 import pickle
 
-Vsigma = 0.1
-Vmean  = np.array([-0.15,0.0])
-Vmagbound = 0.25
+#Vsigma = 0.1
+# Using the revised fire spread to midflame wind speed from
+# https://www.fs.fed.us/rm/pubs_other/rmrs_2013_andrews_p001.pdf
+# page 7
+# At 8% dry moisture GR1 fuel model the 20km/h average wind speed equates to 
+# roughly 0.2 m/s fire spread
+Vmagbound = 0.30
+Vdirbound = 0.35 * math.pi
 Vmean_mag = 0.2
 Vmean_dir = 1.5 * math.pi
 Vsigma_mag = 0.1
-Vsigma_dir = 0.35 * math.pi
+Vsigma_dir = 0.25 * math.pi
+Vmean  = np.array([-Vmean_mag,0.0])
 # Constants from Mendel paper
 _k = 2.1360e-1 # m^2 s^-1 K^-3
 _A = 1.8793e2 # K s^-1 # was e2
@@ -72,8 +79,7 @@ def rand_wind_old(vmean,vsigma):
 def rand_wind(curV):
 	cur_theta = math.fmod((math.atan2(curV[1],curV[0]) + math.pi * 2), math.pi * 2)
 	cur_mag = np.linalg.norm(curV,ord=2)
-	new_theta_sig = max(Vsigma_dir * math.cos(Vmean_dir - cur_theta),0.001)
-	theta = np.random.normal(cur_theta,new_theta_sig,1)
+	theta = np.clip(np.random.normal(cur_theta,Vsigma_dir,1),-Vdirbound,Vdirbound)
 	r = np.clip(np.random.normal(cur_mag,Vsigma_mag,1),0,Vmagbound)
 	return np.array([r * np.cos(theta), r * np.sin(theta)]).flatten()
 

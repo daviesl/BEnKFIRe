@@ -200,8 +200,8 @@ if False:
 			#b = np.clip(arr_arr[i-1]-a,0,2)
 			#b /= np.amax(b)
 			b = farr_arr[i-1]-a
-			blowidx = b < 0.1
-			b[blowidx] = -1
+			#blowidx = b < 0.1
+			#b[blowidx] = -1
 			dnbr_arr.append(b)
 else:
 	#median filter applied to dNBR

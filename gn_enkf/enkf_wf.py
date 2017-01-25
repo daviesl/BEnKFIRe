@@ -19,12 +19,13 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from matplotlib import animation
 from matplotlib import colors
-from matplotlib.dates import datestr2num
+from matplotlib.dates import datestr2num, num2date
 import gdal
 import sys
 import os
 #from filterpy.kalman import EnsembleKalmanFilter as EnKF
 import bisect
+from datetime import datetime, timedelta
 
 import wf_state as WF
 
@@ -93,6 +94,10 @@ class ThreadPool:
 		""" Wait for completion of all the tasks in the queue """
 		self.tasks.join()
 
+class RasterInfo(object):
+	def __init__(self,r):
+		self.RasterXSize = r.RasterXSize
+		self.RasterYSize = r.RasterYSize
 
 # pickle line required for multiprocessing
 #pickle(MethodType, _pickle_method, _unpickle_method)
@@ -156,7 +161,7 @@ def plotState2(s,s0,e):
 	imT.set_data(s.T)
 	imS0.set_data(s0.S)
 	imT0.set_data(s0.T)
-	ttl.set_text('Iteration: %d, Wind velocity = (%f, %f)'%(s.Iter,s.V[0],s.V[1]))
+	ttl.set_text('Iteration: %d, Wind velocity = (%f, %f), Epoch = %s'%(s.Iter,s.V[0],s.V[1],e))
 	#plt.draw()
 	plt.pause(0.05)
 	#time.sleep(1)
@@ -176,7 +181,8 @@ def plotState(s,sigmas_,e):
 	imS = axS.imshow(s.S, cmap='gray', vmin=0, vmax=1, interpolation='none')#, interpolation='nearest')
 	imT = axT.imshow(s.T, cmap='jet', vmin=WF._Tal, vmax=1000, interpolation='none')#, interpolation='nearest')
 	ttl = axS.text(.5, 1.05, '', transform = axS.transAxes, va='center')
-	ttl.set_text('Iteration: %d, Wind velocity = (%f, %f)'%(s.Iter,s.V[0],s.V[1]))
+	dt_epoch = num2date(e)
+	ttl.set_text('Iteration: %d, Wind velocity = (%f, %f), epoch = %s'%(s.Iter,s.V[0],s.V[1],str(dt_epoch)))
 	axS_ = []
 	axT_ = []
 	imS_ = []
@@ -257,10 +263,6 @@ def getMeasForEpoch(epoch):
 # TODO Write EnKF core here.
 
 	
-
-# Note to Friday Laurence: due to "morphing"? data availability, somehow use predictions as data but don't affect covariance somehow. 
-# not sure if this is done in the HA() update step? Observed minus calculated, but observed is equal to calculated.
-# Update: morphing re Mendel's paper refers to image registration
 
 # for presentation:
 #    movie with the following panes:
@@ -363,8 +365,9 @@ def mainloop():
 	
 	gausskernel43x43 = np.loadtxt('gk43.txt')
 	
-	dr='/g/data/r78/lsd547/H8/WA/2016/01/'
-	hs_h8_file='WA_jan2016_H8_ALBERS.csv'
+	dr='/g/data/r78/lsd547/H8/WA2/2016/01/'
+	#hs_h8_file='WA_jan2016_H8_ALBERS.csv'
+	hs_h8_file='WA_20160101_30_H8_ALBERS.csv'
 	hs_MODIS_file='WA_jan2016_MODIS_VIIRS_ALBERS.csv'
 	
 	
@@ -373,50 +376,64 @@ def mainloop():
 	# a 2D grid with 5x5 metre cell size
 	gridtrans = WF.LocalTransformation2D(test_extents,(1/WF._dt))
 	
-	H8_B07 = []
-	H8_NBR = []
+	#H8_B14 = []
+	#H8_NBR = []
+	H8_Cov = {}
+	
 	
 	#ymd = '20160106'
 	y = '2016'
 	m = '01'
 	#days = (6,7,8)
-	days = (6,7)
+	days = (1,2,3,4,5,6,7,8,9,10)
+	bands = ['B03_Aus','B04_Aus','B07_Aus','B11_Aus','B13_Aus','B14_Aus','B15_Aus','NBR']
 	
+	for band in bands:
+		H8_Cov[band] = []
+
 	# Load band 7 imagery
 	for d in days:
 		for hour in range(24):
 			for tenminute in range(6):
 				minute = tenminute * 10
-				
-				#fn = '%s%s%02d_%02d%02d_B07_Aus.tif'%(y,m,d,hour,minute)
-				fn = '%s%s%02d_%02d%02d_B14_Aus.tif'%(y,m,d,hour,minute)
+					
+				for band in bands:
+					#fn = '%s%s%02d_%02d%02d_B14_Aus.tif'%(y,m,d,hour,minute)
+					fn = '%s%s%02d_%02d%02d_%s.tif'%(y,m,d,hour,minute,band)
+					print 'opening %s%02d/%s'%(dr ,d,fn)
+					try:
+						r = gdal.Open('%s%02d/%s'%(dr,d,fn))
+						# TODO crop to test extents
+						a = np.array(r.GetRasterBand(1).ReadAsArray())
+						tr = r.GetGeoTransform()
+						print 'loaded'
+						#H8_B14.append( (utc2num('%s-%s-%02dT%02d:%02d:00Z'%(y,m,d,hour,minute)),tr,r,a) )
+						H8_Cov[band].append( (utc2num('%s-%s-%02dT%02d:%02d:00Z'%(y,m,d,hour,minute)),tr,RasterInfo(r),a) )
+						while r is not None:
+							r = None
+							tr = None
+						#i += 1
+					except AttributeError, e:
+						print e
+						print "Unexpected error:", sys.exc_info()[0]
+						print 'File for band %s for time %02d%02d does not exist'%(band,hour,minute)
+						while r is not None:
+							r = None
+							tr = None
+				#fn = '%s%s%02d_%02d%02d_NBR.tif'%(y,m,d,hour,minute)
 				#print 'opening ' + dr + fn
-				try:
-					r = gdal.Open('%s/%02d/%s'%(dr,d,fn))
-					# TODO crop to test extents
-					a = np.array(r.GetRasterBand(1).ReadAsArray())
-					tr = r.GetGeoTransform()
-					#print 'loaded'
-					H8_B07.append( (utc2num('%s-%s-%02dT%02d:%02d:00Z'%(y,m,d,hour,minute)),tr,r,a) )
-					#i += 1
-				except AttributeError, e:
-					print e
-					print "Unexpected error:", sys.exc_info()[0]
-					print 'File for time %02d%02d does not exist'%(hour,minute)
-				fn = '%s%s%02d_%02d%02d_NBR.tif'%(y,m,d,hour,minute)
-				#print 'opening ' + dr + fn
-				try:
-					r = gdal.Open('%s/%02d/%s'%(dr,d,fn))
-					# TODO crop to test extents
-					a = np.array(r.GetRasterBand(1).ReadAsArray())
-					tr = r.GetGeoTransform()
-					#print 'loaded'
-					H8_NBR.append( (utc2num('%s-%s-%02dT%02d:%02d:00Z'%(y,m,d,hour,minute)),tr,r,a,None) )
-					#i += 1
-				except AttributeError, e:
-					print e
-					print "Unexpected error:", sys.exc_info()[0]
-					print 'File for time %02d%02d does not exist'%(hour,minute)
+				#try:
+				#	r = gdal.Open('%s/%02d/%s'%(dr,d,fn))
+				#	# TODO crop to test extents
+				#	a = np.array(r.GetRasterBand(1).ReadAsArray())
+				#	tr = r.GetGeoTransform()
+				#	#print 'loaded'
+				#	H8_NBR.append( (utc2num('%s-%s-%02dT%02d:%02d:00Z'%(y,m,d,hour,minute)),tr,r,a,None) )
+				#	#i += 1
+				#except AttributeError, e:
+				#	print e
+				#	print "Unexpected error:", sys.exc_info()[0]
+				#	print 'File for time %02d%02d does not exist'%(hour,minute)
 	
 	#Load hotspots
 	hs_h8 = np.loadtxt(hs_h8_file,skiprows=1,delimiter=',',usecols=(0,1,2,3,4,5,6,7,8),converters={2:datestr2num})
@@ -457,7 +474,9 @@ def mainloop():
 	# sort arrays
 	hs_MODIS[hs_MODIS[:,2].argsort()] #3rd column is start_dt
 	hs_h8[hs_h8[:,2].argsort()] #3rd column is utc time
-	H8_B07 = sorted(H8_B07,key=lambda x: x[0])
+	#H8_B14 = sorted(H8_B14,key=lambda x: x[0])
+	for band in bands:
+		H8_Cov[band] = sorted(H8_Cov[band],key=lambda x: x[0])
 	
 	# The reason why OrderedDict is used but data is kept in Tuples is because multiple hotspots exist for one epoch, and key,value pairs where key=epoch would either require a list for values or would only allow one value.
 	#hs_MODIS_meas = []
@@ -466,8 +485,8 @@ def mainloop():
 	#hs_h8_meas = []
 	hs_h8_radius = 0.5 * 2000.0 / WF._dx
 	
-	#H8_B07_meas = []
-	H8_B07_radius = 500.0 / WF._dx
+	#H8_B14_meas = []
+	H8_B14_radius = 1000.0 / WF._dx
 	
 
 	# create measurement objects
@@ -496,12 +515,13 @@ def mainloop():
 	# sort the measurements and get the epochs of hotspots
 	sortMeas()
 
-	#H8_B07_meas = OrderedDict(sorted(H8_B07_meas, key=lambda m: m[0]))
+	#H8_B14_meas = OrderedDict(sorted(H8_B14_meas, key=lambda m: m[0]))
 	last_a = []
 	last_e = 99999
-	for i,(e,tr,r,a,dnbr) in enumerate(H8_NBR):
-		if i < (len(H8_NBR) - 1) and np.isfinite(a).any():
-			(next_e,next_tr,next_r,next_a,next_dnbr) = H8_NBR[i+1]
+	#for i,(e,tr,r,a,dnbr) in enumerate(H8_NBR):
+	for i,(e,tr,r,a) in enumerate(H8_Cov['NBR']):
+		if i < (len(H8_Cov['NBR']) - 1) and np.isfinite(a).any():
+			(next_e,next_tr,next_r,next_a) = H8_Cov['NBR'][i+1]
 			# don't use last_e for now, but maybe use it as a threshold, i.e. if last_e < timelimit: add dnbr
 			epoch_diff = next_e - e
 			if epoch_diff < (1300.0 / 86400):
@@ -556,7 +576,8 @@ def mainloop():
 			
 				#H8_NBR[i] = (e,tr,r,a,dnbr)
 			
-	for e,tr,r,a in H8_B07:
+	#for e,tr,r,a in H8_B14:
+	for e,tr,r,a in H8_Cov['B07_Aus']:
 		#_epoch = min(e,_epoch)
 		if e >= _epoch:
 			cols = r.RasterXSize
@@ -582,7 +603,8 @@ def mainloop():
 						#addMeas(e,PixelTempMeasurement(gridPixPt,trans.scale*0.5,a[col][row],e))
 						addMeas(e,WF.PixelTempMeasurement(WF.Point2D(rasterbounds.minx+(col+0.5)*pixSize.x,rasterbounds.miny+(row+0.5)*pixSize.y),pixSize.x*0.5,a[row][col],e))
 			 
-	for i,(e,tr,r,a,dnbr) in enumerate(H8_NBR):
+	#for i,(e,tr,r,a,dnbr) in enumerate(H8_NBR):
+	for i,(e,tr,r,a) in enumerate(H8_Cov['NBR']):
 		if e >= _epoch:
 			cols = r.RasterXSize
 			rows = r.RasterYSize

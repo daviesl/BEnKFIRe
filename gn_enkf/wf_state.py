@@ -168,7 +168,10 @@ class State(object):
 		S = ndimage.filters.gaussian_filter(np.clip(np.random.normal(forest_fraction,0.1,(ny,nx)),0,1),2,mode='nearest')
 		# Initialize the ambient temperature grid.
 		#T  = np.ones((ny, nx)) * _Ta + ndimage.filters.gaussian_filter(np.absolute(np.random.normal(0,Ta_stddev,(ny,nx))),4,mode='nearest')
-		T  = np.clip(np.ones((ny, nx)) * Ta + ndimage.filters.gaussian_filter(np.random.normal(0,Ta_stddev,(ny,nx)),2,mode='nearest'),_Talclip,600)
+		
+		#T  = np.clip(np.ones((ny, nx)) * Ta + ndimage.filters.gaussian_filter(np.random.normal(0,Ta_stddev,(ny,nx)),2,mode='nearest'),_Talclip,600)
+		# Do not add noise
+		T  = np.clip(np.ones((ny, nx)) * Ta + ndimage.filters.gaussian_filter(np.random.normal(0,Ta_stddev,(ny,nx)),50,mode='nearest'),_Talclip,600)
 	
 		# add ignition point (assuming 16 points)
 		sqrtN = int(math.sqrt(N))

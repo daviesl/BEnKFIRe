@@ -23,14 +23,26 @@ dnbr_arr = []
 b03arr_arr = []
 #b04rast_arr = []
 b04arr_arr = []
+b14arr_arr = []
+b11arr_arr = []
+b15arr_arr = []
+b13arr_arr = []
+b07arr_arr = []
 
 virnir_arr = []
+ndvi_arr = []
+singlerefl_arr = []
+fog_arr = []
+fog2_arr = []
+cloud_arr = []
+gross_arr = []
+thin_arr = []
 
 cols = 0
 rows = 0
 geotransform = None
 
-days=(6,7,8,9,10)
+days=(1,2,3,4,5,6,7,8,9,10)
 
 for day in days:
 	for hour in range(24):
@@ -41,8 +53,51 @@ for day in days:
 			fn = '%02d/201601%02d_%02d%02d_NBR.tif'%(day,day,hour,minute)
 			b3fn = '%02d/201601%02d_%02d%02d_B03_Aus.tif'%(day,day,hour,minute)
 			b4fn = '%02d/201601%02d_%02d%02d_B04_Aus.tif'%(day,day,hour,minute)
+			b11fn = '%02d/201601%02d_%02d%02d_B11_Aus.tif'%(day,day,hour,minute)
+			b14fn = '%02d/201601%02d_%02d%02d_B14_Aus.tif'%(day,day,hour,minute)
+			b15fn = '%02d/201601%02d_%02d%02d_B15_Aus.tif'%(day,day,hour,minute)
+			b13fn = '%02d/201601%02d_%02d%02d_B13_Aus.tif'%(day,day,hour,minute)
+			b7fn = '%02d/201601%02d_%02d%02d_B07_Aus.tif'%(day,day,hour,minute)
 			print 'opening ' + dr + fn
 			try:
+				#B13
+				r = gdal.Open(dr+b13fn)
+				cols = r.RasterXSize
+				rows = r.RasterYSize
+				geotransform = r.GetGeoTransform()
+				b13 = np.array(r.GetRasterBand(1).ReadAsArray())
+				print 'loaded B13'
+				#b14rast_arr.append(r )
+				b13arr_arr.append( b13 )
+				r = None
+				#B11
+				r = gdal.Open(dr+b11fn)
+				b11 = np.array(r.GetRasterBand(1).ReadAsArray())
+				print 'loaded B11'
+				#b14rast_arr.append(r )
+				b11arr_arr.append( b11 )
+				r = None
+				#B14
+				r = gdal.Open(dr+b14fn)
+				b14 = np.array(r.GetRasterBand(1).ReadAsArray())
+				print 'loaded B14'
+				#b14rast_arr.append(r )
+				b14arr_arr.append( b14 )
+				r = None
+				#B15
+				r = gdal.Open(dr+b15fn)
+				b15 = np.array(r.GetRasterBand(1).ReadAsArray())
+				print 'loaded B14'
+				#b15rast_arr.append(r )
+				b15arr_arr.append( b15 )
+				r = None
+				#B07
+				r = gdal.Open(dr+b7fn)
+				b7 = np.array(r.GetRasterBand(1).ReadAsArray())
+				print 'loaded B07'
+				#b07rast_arr.append(r )
+				b07arr_arr.append( b7 )
+				r = None
 				#B03
 				r = gdal.Open(dr+b3fn)
 				b3 = np.array(r.GetRasterBand(1).ReadAsArray())
@@ -56,25 +111,72 @@ for day in days:
 				print 'loaded B04'
 				#b04rast_arr.append(r )
 				b04arr_arr.append( b4 )
+				r = None
+				# VIR / NIR ratio
 				vn = np.divide(b4,b3)
 				virnir_arr.append( vn )
-				r = None
+				# Top Temperature
+				# NDVI
+				ndvi = np.divide(b4-b3,b4+b3)
+				ndvi_arr.append(ndvi)
 				#del r
 				#NBR
 				r = gdal.Open(dr+fn)
 				a = np.array(r.GetRasterBand(1).ReadAsArray())
 				print 'loaded nbr'
 				#rast_arr.append(r )
+				if 11*6 <= hour*6 + tenminute <= 21*6 + 2:
+					a *= np.nan
 				arr_arr.append( a )
-				cols = r.RasterXSize
-				rows = r.RasterYSize
-				geotransform = r.GetGeoTransform()
 				r = None
 				i += 1
 			except AttributeError, e:
 				print e
 				print "Unexpected error:", sys.exc_info()[0]
 				print 'File for time %02d%02d does not exist'%(hour,minute)
+
+B03_avg = np.ma.median(b03arr_arr[0:700],axis=0)
+if not np.isfinite(B03_avg).all():
+	print "B03 avg not finite"
+	sys.exit()
+
+B13_avg = np.ma.median(b13arr_arr[0:700],axis=0)
+B14_avg = np.ma.median(b14arr_arr[0:700],axis=0)
+B11_avg = np.ma.median(b11arr_arr[0:700],axis=0)
+B15_avg = np.ma.median(b15arr_arr[0:700],axis=0)
+B07_avg = np.ma.median(b07arr_arr[0:700],axis=0)
+for i,b14 in enumerate(b14arr_arr):
+	#srt = np.clip(np.divide(B03_avg,b3),0,1)
+	gross = np.clip(np.divide(B13_avg,b13arr_arr[i]),0,10000)
+	#singlerefl_arr.append(srt)
+	gross_arr.append(gross)
+	#c = np.exp(-np.power(virnir_arr[i]*srt,2))
+	#c = np.exp(-np.power(virnir_arr[i] * gross,2))
+	
+	thin = np.divide(b14arr_arr[i]-b15arr_arr[i],B14_avg-B15_avg)
+	#thin = np.clip(np.divide(b14arr_arr[i]-b15arr_arr[i],B14_avg-B15_avg),0,10000)
+	#thin = np.clip(np.divide(b14arr_arr[i],b15arr_arr[i]),0,1000)
+	thin_arr.append(thin)
+	#fog = np.clip(np.divide(b14arr_arr[i]-b07arr_arr[i],B14_avg-B07_avg),0,10000)
+	fog = np.divide(b14arr_arr[i]-b07arr_arr[i],B14_avg-B07_avg)
+	#fog = np.clip(np.divide(b07arr_arr[i]-b14arr_arr[i],b07arr_arr[i]+b14arr_arr[i]),0,1000)
+	fog_arr.append(fog)
+	#fog2 = np.clip(np.divide(b14arr_arr[i]-b11arr_arr[i],B14_avg-B11_avg),0,10000)
+	fog2 = np.divide(b14arr_arr[i]-b11arr_arr[i],B14_avg-B11_avg)
+	#fog2 = np.clip(np.divide(b14arr_arr[i],b11arr_arr[i]),0,1000)
+	fog2_arr.append(fog2)
+	#c = np.exp(-np.power(virnir_arr[i] * thin,2))
+	#c = np.exp(-virnir_arr[i] * thin * gross)
+	#c = np.exp(-np.power(gross *virnir_arr[i],2))
+	#c = np.exp(-np.minimum(thin,fog))
+	#c = np.exp(-thin*fog*fog2*gross)
+	#c = np.exp(-thin*fog*fog2)
+	c = np.exp(-thin*fog2)
+	
+	cloud_arr.append(c)
+	
+	
+
 if False:
 	# the following code applies the median filter to the NBR
 	for i,a in enumerate(arr_arr):
@@ -108,13 +210,15 @@ else:
 	P = np.ones(dim)
 	Pminus = np.zeros(dim)
 	K = np.zeros(dim)
-	R = 0.1 ** 2 # estimate of measurement variance
+	R = 0.2 ** 2 # estimate of measurement variance
 	Rmin = 0.01 ** 2
 	Q = 1e-5 # process variance
 	print "dim " + str(dim)
-	for i,a in enumerate(farr_arr):
+	#for i,a in enumerate(farr_arr):
+	for i,a in enumerate(arr_arr):
 		if np.isfinite(virnir_arr[i]).all():
-			Rm = np.clip(R * np.exp(-np.power(virnir_arr[i]*1.5,2)),Rmin,R)
+			#Rm = np.clip(R * np.exp(-np.power(virnir_arr[i]*1.5,2)),Rmin,R)
+			Rm = np.clip(R * cloud_arr[i],Rmin,R)
 		else:
 			Rm = np.ones(dim) * R
 		# time update
@@ -161,18 +265,23 @@ pixelHeight = geotransform[5]
 print 'Origin: (%f, %f)'%(originX,originY)
 
 fig = plt.figure(figsize=(50/3,12.5))
-gs = gridspec.GridSpec(3,2, width_ratios=[1,1])
+gs = gridspec.GridSpec(4,2, width_ratios=[1,1])
 axNBR = fig.add_subplot(gs[0,0])
 axMNBR = fig.add_subplot(gs[0,1])
 axKNBR = fig.add_subplot(gs[1,0])
 axDNBR = fig.add_subplot(gs[1,1])
 axVIR = fig.add_subplot(gs[2,0])
+axCLD = fig.add_subplot(gs[2,1])
+axFOG = fig.add_subplot(gs[3,0])
+axFOG2 = fig.add_subplot(gs[3,1])
 imNBR = axNBR.imshow(farr_arr[0],cmap='Greys_r',interpolation='none', vmin=-1, vmax=1, extent=(originX,originX+pixelWidth*cols,originY+pixelHeight*rows,originY))
 imMNBR = axMNBR.imshow(farr_arr[0],cmap='Greys_r',interpolation='none', vmin=-1, vmax=1, extent=(originX,originX+pixelWidth*cols,originY+pixelHeight*rows,originY))
 imKNBR = axKNBR.imshow(kfarr_arr[0],cmap='Greys_r',interpolation='none', vmin=-1, vmax=1, extent=(originX,originX+pixelWidth*cols,originY+pixelHeight*rows,originY))
 imDNBR = axDNBR.imshow(dnbr_arr[0],cmap='jet',interpolation='none', vmin=-0.5, vmax=0.5, extent=(originX,originX+pixelWidth*cols,originY+pixelHeight*rows,originY))
-print "len virnir " + str(len(virnir_arr))
-imVIR = axVIR.imshow(virnir_arr[0],cmap='Greys',interpolation='none', vmin=0, vmax=5, extent=(originX,originX+pixelWidth*cols,originY+pixelHeight*rows,originY))
+imVIR = axVIR.imshow(thin_arr[0],cmap='Greys_r',interpolation='none', vmin=0, vmax=10, extent=(originX,originX+pixelWidth*cols,originY+pixelHeight*rows,originY))
+imCLD = axCLD.imshow(cloud_arr[0],cmap='Greys_r',interpolation='none', vmin=0, vmax=1, extent=(originX,originX+pixelWidth*cols,originY+pixelHeight*rows,originY))
+imFOG = axFOG.imshow(fog_arr[0],cmap='Greys_r',interpolation='none', vmin=0, vmax=10, extent=(originX,originX+pixelWidth*cols,originY+pixelHeight*rows,originY))
+imFOG2 = axFOG2.imshow(fog2_arr[0],cmap='Greys_r',interpolation='none', vmin=0, vmax=10, extent=(originX,originX+pixelWidth*cols,originY+pixelHeight*rows,originY))
 #axNBR.colorbar()
 
 print 'Initted figure'
@@ -184,7 +293,10 @@ def animate(i):
 	imNBR.set_data(animate.nbr_arr[animate.Iter])
 	imMNBR.set_data(animate.mnbr_arr[animate.Iter])
 	imKNBR.set_data(animate.knbr_arr[animate.Iter])
-	imVIR.set_data(animate.virnir_arr[animate.Iter])
+	imVIR.set_data(animate.thin_arr[animate.Iter])
+	imFOG.set_data(animate.fog_arr[animate.Iter])
+	imFOG2.set_data(animate.fog2_arr[animate.Iter])
+	imCLD.set_data(animate.cloud_arr[animate.Iter])
 	#ttl.set_text('Iteration: %d (1 simulated second per iteration)'%(animate.Iter))
 	if animate.Iter < i-1:
 		animate.Iter += 1
@@ -194,7 +306,10 @@ animate.dnbr_arr = dnbr_arr
 animate.knbr_arr = kfarr_arr
 animate.mnbr_arr = farr_arr
 animate.nbr_arr = arr_arr
-animate.virnir_arr = virnir_arr
+animate.thin_arr = thin_arr #virnir_arr
+animate.fog_arr = fog_arr
+animate.fog2_arr = fog2_arr
+animate.cloud_arr = cloud_arr #thin_arr #singlerefl_arr
 animate.Iter = 0
 
 print 'Set animate'

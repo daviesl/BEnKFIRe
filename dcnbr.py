@@ -15,6 +15,7 @@ import shapely
 import shapely.geometry
 from shapely.geometry import shape
 import rasterio
+import pickle
 #import warnings
 #warnings.filterwarnings('ignore')
 
@@ -100,7 +101,7 @@ setQueryExtent(-13.98,-14.05,131.10,130.95,1000)
 #setQueryEpoch('2000-01-01','2016-07-31')
 setQueryEpoch('2015-01-01','2016-10-31')
 
-def loadBands(usels8=True,usels7=True,usels5=True):
+def loadBands(usels8=True,usels7=True,usels5=False):
 	global time_sorted
 	global nbar_clean
 	global all_nbr_sorted
@@ -281,13 +282,16 @@ def getNBRExtent():
 	global nbar_clean
 	return [nbar_clean.coords['x'].max(),nbar_clean.coords['x'].min(),nbar_clean.coords['y'].max(),nbar_clean.coords['y'].min()]
 
-def plotNBR(visext,i=0,vmin=0.85,vmax=1):
+def plotNBR(visext,fn='landsat_dnbr.txt',i=0,vmin=0.85,vmax=1):
 	#annual_nbr = all_nbr_sorted.groupby('time.year')
 	annual_nbr = all_nbr_sorted
 	
 	annual_nbrmin = annual_nbr.min(dim = 'time')
 	annual_nbrmax = annual_nbr.max(dim = 'time')
 	dnbr = annual_nbrmax - annual_nbrmin
+	np.savetxt(fn,dnbr)
+	print 'extents:'
+	print visext
 	fig = plt.figure()
 	gs = gridspec.GridSpec(1,1, width_ratios=[1,1])
 	

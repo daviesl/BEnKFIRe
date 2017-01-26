@@ -16,13 +16,25 @@ import math
 #X = iris.data[:, :2]  # we only take the first two features.
 #Y = iris.target
 
-hs_h8_file='TAS_Jan01_21_H8_ALBERS_dt.csv'
+#TAS
+#hs_h8_file='TAS_Jan01_21_H8_ALBERS_dt.csv'
+#dnbr_fn='tas_landsat_dnbr.txt'
+#dnbr_area_extents=[1159237.5,1074712.5,-4514812.5,-4598387.5]
+#fire_after = datestr2num('2016-01-14 04:12:00')
+#nofire_before = datestr2num('2016-01-13 20:12:00')
+
+#WAROONA
+hs_h8_file='WA_20160101_30_H8_ALBERS.csv'
+dnbr_fn='waroona_landsat_dnbr.txt'
+dnbr_area_extents=[-1442387.5,-1530912.5,-3654112.5,-3708912.5]
+fire_after = datestr2num('2016-01-06 08:12:00')
+nofire_before = datestr2num('2016-01-06 00:12:00')
+
 hs_h8 = np.loadtxt('dnbr_'+hs_h8_file,skiprows=0,delimiter=',')
 
-dnbr_area_fn='/local/r78/tas_landsat_dnbr.txt'
+dnbr_dir = '/g/data/r78/lsd547/landsat_dnbr/' # /local/r78
+dnbr_area_fn=dnbr_dir+dnbr_fn
 dnbr_area=np.loadtxt(dnbr_area_fn)
-dnbr_area_extents=[1159237.5,1074712.5,-4514812.5,-4598387.5]
-#dnbr_area_extents=[-1442387.5,-1530912.5,-3654112.5,-3708912.5]
 def localise(x,y):
 	(nx,ny) = dnbr_area.shape
 	#print "DNBR size"
@@ -60,8 +72,6 @@ def getdnbr(x,y):
 
 # use date 2016-01-14 04:12:00 to classify training set.
 # TODO clear hs between midnight and 4:12am
-fire_after = datestr2num('2016-01-14 04:12:00')
-nofire_before = datestr2num('2016-01-13 20:12:00')
 def isfire(x,y,d):
 	if d >= fire_after and getdnbr(x,y) >= 0.5:
 		return 1
@@ -87,7 +97,7 @@ for row in hs_h8:
 #X = hs_h8[:,[12,15,16,17,18,19,20,21,22,24]]
 X = hs_h8[:,[8,9,12,15,19,20,21,22,24]]
 (xrows, xcols) = X.shape
-rings = 5
+rings = 3
 ringradius = 2000
 ringradius_err = 100
 X = np.concatenate((X,np.ones((xrows,2*rings + 1))*9999),axis=1)
@@ -142,10 +152,10 @@ if action=='classify2':
 	Wtest = np.delete(W,test_l,axis=0)
 	print "Train size " + str(len(Xtrain)) + " " + str(len(Ytrain))
 
-	logreg = linear_model.LogisticRegression(C=1e5)
+	#logreg = linear_model.LogisticRegression(C=1e5)
 	#logreg = DecisionTreeClassifier(random_state=0)
 	#logreg = SVC(kernel='linear',degree=3,verbose=True,probability=True)
-	#logreg = RandomForestClassifier(verbose=True)
+	logreg = RandomForestClassifier(verbose=True)
 	logreg.fit(Xtrain, Ytrain, sample_weight=Wtrain)
 	Ypred = logreg.predict_proba(Xtest)[:,1]
 

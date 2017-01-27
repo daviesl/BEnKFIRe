@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.ma as ma
 import matplotlib.pyplot as plt
 from sklearn import linear_model, datasets
 from sklearn.decomposition import PCA
@@ -8,155 +9,176 @@ from matplotlib.dates import datestr2num, num2date
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.neural_network import MLPClassifier
 import sys
 import math
 
-# import some data to play with
-#iris = datasets.load_iris()
-#X = iris.data[:, :2]  # we only take the first two features.
-#Y = iris.target
 
-#TAS
-#hs_h8_file='TAS_Jan01_21_H8_ALBERS_dt.csv'
-#dnbr_fn='tas_landsat_dnbr.txt'
-#dnbr_area_extents=[1159237.5,1074712.5,-4514812.5,-4598387.5]
-#fire_after = datestr2num('2016-01-14 04:12:00')
-#nofire_before = datestr2num('2016-01-13 20:12:00')
-
-#WAROONA
-hs_h8_file='WA_20160101_30_H8_ALBERS.csv'
-dnbr_fn='waroona_landsat_dnbr.txt'
-dnbr_area_extents=[-1442387.5,-1530912.5,-3654112.5,-3708912.5]
-fire_after = datestr2num('2016-01-06 08:12:00')
-nofire_before = datestr2num('2016-01-06 00:12:00')
-
-hs_h8 = np.loadtxt('dnbr_'+hs_h8_file,skiprows=0,delimiter=',')
-
-dnbr_dir = '/g/data/r78/lsd547/landsat_dnbr/' # /local/r78
-dnbr_area_fn=dnbr_dir+dnbr_fn
-dnbr_area=np.loadtxt(dnbr_area_fn)
-def localise(x,y):
-	(nx,ny) = dnbr_area.shape
-	#print "DNBR size"
-	#print dnbr_area.shape
-	print (x,y)
-	w = dnbr_area_extents[1]-dnbr_area_extents[0]
-	h = dnbr_area_extents[3]-dnbr_area_extents[2]
-	tx = nx * (x - dnbr_area_extents[1]) / w
-	ty = ny * (y - dnbr_area_extents[3]) / h
-	return (tx,ty)
-
-def getdnbr(x,y):
-	(tx,ty) = localise(x,y)
-	return np.mean(dnbr_area[tx-20:tx+20,ty-20:ty+20])
-	
-
-# hs_cols = 9
-#	hs_h8[i,hs_cols + 1] = dval
-#	hs_h8[i,hs_cols + 2] = ndvival
-#	hs_h8[i,hs_cols + 3] = rawndvival
-#	hs_h8[i,hs_cols + 4] = dnbrval
-#	hs_h8[i,hs_cols + 5] = nbrval
-#	hs_h8[i,hs_cols + 6] = rawnbrval
-#	hs_h8[i,hs_cols + 7] = b6val
-#	hs_h8[i,hs_cols + 8] = b7val
-#	hs_h8[i,hs_cols + 9] = b14val
-#	hs_h8[i,hs_cols + 10] = gross_val
-#	hs_h8[i,hs_cols + 11] = thin_val
-#	hs_h8[i,hs_cols + 12] = fog_val
-#	hs_h8[i,hs_cols + 13] = fog2_val
-#	hs_h8[i,hs_cols + 17] = row
-#	hs_h8[i,hs_cols + 16] = col
-#	hs_h8[i,hs_cols + 15] = epochdelta
-#       hs_h8[i,hs_cols + 0] =  in date range of band data
-
-# use date 2016-01-14 04:12:00 to classify training set.
-# TODO clear hs between midnight and 4:12am
-def isfire(x,y,d):
-	if d >= fire_after and getdnbr(x,y) >= 0.5:
-		return 1
-	else:
-		return 0
-
-def hasdnbr(x,y):
-	if dnbr_area_extents[1] <= x <= dnbr_area_extents[0] and dnbr_area_extents[3] <= y <= dnbr_area_extents[2] and np.isfinite(getdnbr(x,y)).all():
-		return 1
-	else:
-		return 0
-
-#trainrows = [hasdnbr(x,y) for x,y in np.nditer(hs_h8[:,[0,1]])]
-nanrows = []
-index = 0
-for row in hs_h8:
-	if not hasdnbr(row[0],row[1]) or nofire_before < row[2] < fire_after:
-		nanrows.append(index)
-	index += 1
-
-#X = hs_h8[:,[12,15]]
-#X = hs_h8[:,[10,11,12,13,14,15,16,17,18,19,20,21,22,24]]
-#X = hs_h8[:,[12,15,16,17,18,19,20,21,22,24]]
-X = hs_h8[:,[8,9,12,15,19,20,21,22,24]]
-(xrows, xcols) = X.shape
-rings = 3
-ringradius = 2000
-ringradius_err = 100
-X = np.concatenate((X,np.ones((xrows,2*rings + 1))*9999),axis=1)
-for i in xrange(xrows):
-	for radix in xrange(rings):
-		(lx,ly,le) = (hs_h8[i,0],hs_h8[i,1],hs_h8[i,2])
+# Globals to use in classifier
+class FireRegion(object):
+	def __init__(self,hs_h8_file,dnbr_fn,dnbr_area_extents,fire_after,nofire_before):
+		#self.X = []
+		#self.Y = []
+		#self.W = []
+		self.hs_h8_file=hs_h8_file
+		self.dnbr_fn=dnbr_fn
+		self.dnbr_area_extents=dnbr_area_extents
+		self.fire_after=fire_after
+		self.nofire_before=nofire_before
+		self.hs_h8 = np.loadtxt('dnbr_'+self.hs_h8_file,skiprows=0,delimiter=',')
+		self.dnbr_dir = '/g/data/r78/lsd547/landsat_dnbr/' # /local/r78
+		self.dnbr_area_fn=self.dnbr_dir+self.dnbr_fn
+		self.dnbr_area=np.loadtxt(self.dnbr_area_fn)
+	def localise(self,x,y):
+		(nx,ny) = self.dnbr_area.shape
+		#print "DNBR size"
+		#print dnbr_area.shape
+		print (x,y)
+		w = self.dnbr_area_extents[1]-self.dnbr_area_extents[0]
+		h = self.dnbr_area_extents[3]-self.dnbr_area_extents[2]
+		tx = nx * (x - self.dnbr_area_extents[1]) / w
+		ty = ny * (y - self.dnbr_area_extents[3]) / h
+		return (tx,ty)
+	def getdnbr(self,x,y):
+		(tx,ty) = self.localise(x,y)
+		return np.mean(self.dnbr_area[tx-20:tx+20,ty-20:ty+20])
+		#hs_cols = 9
+		#hs_h8[i,hs_cols + 1] = dval
+		#hs_h8[i,hs_cols + 2] = ndvival
+		#hs_h8[i,hs_cols + 3] = rawndvival
+		#hs_h8[i,hs_cols + 4] = dnbrval
+		#hs_h8[i,hs_cols + 5] = nbrval
+		#hs_h8[i,hs_cols + 6] = rawnbrval
+		#hs_h8[i,hs_cols + 7] = b6val
+		#hs_h8[i,hs_cols + 8] = b7val
+		#hs_h8[i,hs_cols + 9] = b14val
+		#hs_h8[i,hs_cols + 10] = gross_val
+		#hs_h8[i,hs_cols + 11] = thin_val
+		#hs_h8[i,hs_cols + 12] = fog_val
+		#hs_h8[i,hs_cols + 13] = fog2_val
+		#hs_h8[i,hs_cols + 17] = row
+		#hs_h8[i,hs_cols + 16] = col
+		#hs_h8[i,hs_cols + 15] = epochdelta
+		#hs_h8[i,hs_cols + 0] =  in date range of band data
+	def isfire(self,x,y,d):
+		# use date 2016-01-14 04:12:00 to classify training set.
+		# TODO clear hs between midnight and 4:12am
+		if d >= self.fire_after and self.getdnbr(x,y) >= 0.27:
+			return 1
+		else:
+			return 0
+	def hasdnbr(self,x,y):
+		if self.dnbr_area_extents[1] <= x <= self.dnbr_area_extents[0] and self.dnbr_area_extents[3] <= y <= self.dnbr_area_extents[2] and np.isfinite(self.getdnbr(x,y)).all():
+			return 1
+		else:
+			return 0
+	def preprocess(self):
+		#trainrows = [hasdnbr(x,y) for x,y in np.nditer(hs_h8[:,[0,1]])]
+		self.nanrows = []
+		index = 0
+		for row in self.hs_h8:
+			if not self.hasdnbr(row[0],row[1]) or self.nofire_before < row[2] < self.fire_after:
+				self.nanrows.append(index)
+			index += 1
+		
+		#X = hs_h8[:,[12,15]]
+		#X = hs_h8[:,[10,11,12,13,14,15,16,17,18,19,20,21,22,24]]
+		#X = hs_h8[:,[12,15,16,17,18,19,20,21,22,24]]
+		self.X = self.hs_h8[:,[8,9,12,15,19,20,21,22,24]]
+		(xrows, xcols) = self.X.shape
+		rings = 3
+		ringradius = 2000
+		ringradius_err = 100
+		self.X = np.concatenate((self.X,np.ones((xrows,2*rings + 1))*9999),axis=1)
+		#for i in xrange(xrows):
+		(lx,ly,le) = (self.hs_h8[:,0],self.hs_h8[:,1],self.hs_h8[:,2])
 		# find latest coincident hotspot before this hotspot
-		(dx,de) = (9999,9999)
-		for j in xrange(i):
-			ndx = math.sqrt((hs_h8[j,0]-lx)**2 + (hs_h8[j,1]-ly)**2)
-			nde = le-hs_h8[j,2]
-			if nde < 0:
-				print 'you must sort the input hotspot in ascending chronological order'
-				sys.exit(0)
-			if (radix - 1) * ringradius + ringradius_err < ndx < radix * ringradius + ringradius_err and nde < de:
-				de = nde
-				dx = ndx
-		X[i,xcols + radix + 0] = de
-		X[i,xcols + radix + 1] = dx
-	t = hs_h8[i,2] - (10.0/24)
-	X[i,xcols+rings*2] = t - int(t)
-X = np.delete(X,nanrows,axis=0)
-Yrows = hs_h8[:,[0,1,2]]
-Yrows = np.delete(Yrows,nanrows,axis=0)
-#Y = np.array([isfire(x,y,d) for x,y,d in np.nditer(hs_h8[:,[0,1,2]])])
-Y = np.array([isfire(row[0],row[1],row[2]) for row in Yrows])
-W = np.absolute(np.clip(np.array([getdnbr(row[0],row[1]) for row in Yrows]),0,1) - 1 + Y)
+		dx = np.ones((xrows,rings)) * 9999
+		de = np.ones((xrows,rings)) * 9999
+		#for j in xrange(i):
+		for j in xrange(1,xrows):
+			#ndx = math.sqrt((self.hs_h8[0:j,0]-lx[0:j])**2 + (self.hs_h8[0:j,1]-ly[0:j])**2)
+			ndx = np.sqrt(np.square(np.roll(self.hs_h8[:,0],j)-lx) + np.square(np.roll(self.hs_h8[:,1],j)-ly))
+			nde = le-np.roll(self.hs_h8[:,2],j)
+			#if nde < 0:
+			#	print 'you must sort the input hotspot in ascending chronological order'
+			#	sys.exit(0)
+			for radix in xrange(rings):
+				tocopy = np.where( ((radix - 1) * ringradius + ringradius_err < ndx) & (ndx <= radix * ringradius + ringradius_err) & (0 <= nde) & (nde < de[:,radix]),np.ones(xrows),np.zeros(xrows))
+				de[:,radix] = np.where(tocopy,nde,de[:,radix])
+				dx[:,radix] = np.where(tocopy,ndx,dx[:,radix])
+				#if (radix - 1) * ringradius + ringradius_err < ndx <= radix * ringradius + ringradius_err and 0 <= nde < de[radix]:
+				#	de[radix] = nde
+				#	dx[radix] = ndx
+		for radix in xrange(rings):
+			self.X[:,xcols + radix + 0] = de[:,radix]
+			self.X[:,xcols + radix + 1] = dx[:,radix]
+		# Offset time of day. Is this necessary?
+		#t = self.hs_h8[:,2] - (10.0/24)
+		#self.X[:,xcols+rings*2] = t - int(t)
+		# Delete nanrows
+		self.X = np.delete(self.X,self.nanrows,axis=0)
+		Yrows = self.hs_h8[:,[0,1,2]]
+		Yrows = np.delete(Yrows,self.nanrows,axis=0)
+		#Y = np.array([isfire(x,y,d) for x,y,d in np.nditer(hs_h8[:,[0,1,2]])])
+		self.Y = np.array([self.isfire(row[0],row[1],row[2]) for row in Yrows])
+		self.W = np.absolute(np.clip(np.array([self.getdnbr(row[0],row[1]) for row in Yrows]),0,1) - 1 + self.Y)
+
+regions = [FireRegion(hs_h8_file='WA_20160101_30_H8_ALBERS.csv',
+		dnbr_fn='waroona_landsat_dnbr.txt',
+		dnbr_area_extents=[-1442387.5,-1530912.5,-3654112.5,-3708912.5],
+		fire_after=datestr2num('2016-01-06 08:12:00'),
+		nofire_before=datestr2num('2016-01-06 00:12:00')),
+	FireRegion(hs_h8_file='TAS_Jan01_21_H8_ALBERS_dt.csv',
+		dnbr_fn='tas_landsat_dnbr.txt',
+		dnbr_area_extents=[1159237.5,1074712.5,-4514812.5,-4598387.5],
+		fire_after= datestr2num('2016-01-14 04:12:00'),
+		nofire_before= datestr2num('2016-01-13 20:12:00'))]
+
+for r in regions:
+	r.preprocess()
 
 #action = 'pca'
 action = 'classify2'
 if action=='classify2':
+	train_rgn = regions[1]
+	test_rgn = regions[0]
 	# separate into train and test
+	#xrows,xcols = train_rgn.X.shape
+	X = np.concatenate((train_rgn.X,test_rgn.X),axis=0)
+	Y = np.concatenate((train_rgn.Y,test_rgn.Y),axis=0)
+	W = np.concatenate((train_rgn.W,test_rgn.W),axis=0)
 	xrows,xcols = X.shape
 	print "X shape "
 	print (xrows,xcols)
 	train_b = np.random.randint(0,2,size=xrows)
-	#print "Train set len " +  str(len(train)) + " +ve = " + str(np.sum(train)) + " zero = " + str(len(train) - np.sum(train))
 	train_l = np.where(train_b)
 	test_l = np.where(1-train_b)
-	# TODO FIXME make this random choice more pythonic e.g. using np.choice()
-	#for idx in xrange(len(train_b)):
-	#	if train_b[idx]==1:
-	#		train_l.append(idx)
-	#	else:
-	#		test_l.append(idx)
 	
 	Xtrain = np.delete(arr=X,obj=train_l,axis=0)
 	Ytrain = np.delete(arr=Y,obj= train_l,axis=0)
 	Wtrain = np.delete(arr=W,obj= train_l,axis=0)
+	#Xtrain = train_rgn.X
+	#Ytrain = train_rgn.Y
+	#Wtrain = train_rgn.W
+
 	Xtest = np.delete(X,test_l,axis=0)
 	Ytest = np.delete(Y,test_l,axis=0)
 	Wtest = np.delete(W,test_l,axis=0)
+	#Xtest = test_rgn.X
+	#Ytest = test_rgn.Y
+	#Wtest = test_rgn.W
+
 	print "Train size " + str(len(Xtrain)) + " " + str(len(Ytrain))
 
 	#logreg = linear_model.LogisticRegression(C=1e5)
 	#logreg = DecisionTreeClassifier(random_state=0)
 	#logreg = SVC(kernel='linear',degree=3,verbose=True,probability=True)
+	#logreg = SVC(verbose=True,probability=True)
 	logreg = RandomForestClassifier(verbose=True)
+	#logreg = MLPClassifier(solver='lbfgs',verbose=True)
 	logreg.fit(Xtrain, Ytrain, sample_weight=Wtrain)
+	#logreg.fit(Xtrain, Ytrain)
 	Ypred = logreg.predict_proba(Xtest)[:,1]
 
 	Ypred_0 = np.delete(Ypred,np.where(Ytest),axis=0)
@@ -177,8 +199,9 @@ if action=='classify2':
 
 	f, ((ax1,ax2),(ax3,ax4)) = plt.subplots(2,2)
 
-	ax3.scatter(np.arange(len(Ytest)),Ytest,c='navy',label='Test')
-	ax3.scatter(np.arange(len(Ypred)),Ypred,c='darkorange',label='Predicted')
+	ax3.scatter(Ytest,Ypred,c=np.square(Ytest-Ypred),label='Test')
+	#ax3.scatter(np.arange(len(Ytest)),Ytest,c='navy',label='Test')
+	#ax3.scatter(np.arange(len(Ypred)),Ypred,c='darkorange',label='Predicted')
 	ax3.set_title('Classification')
 	ax3.legend(loc='lower right')
 
@@ -259,7 +282,7 @@ elif action=='pca':
 	Xscale = np.concatenate((X,np.zeros((xrows,1))),axis=1)
 	Xscale[:,xcols] = Y
 	Xscale = scale(Xscale)
-	(rws, n_components) = Xscale.shape #index - len(nanrows)
+	(rws, n_components) = Xscale.shape 
 	pca = PCA(n_components=n_components)
 	pca.fit(Xscale)
 	Xout = pca.transform(Xscale)

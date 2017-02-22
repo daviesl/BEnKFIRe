@@ -47,7 +47,7 @@ class FireRegion(object):
 	def getdnbr(self,x,y):
 		(tx,ty) = self.localise(x,y)
 		#return np.mean(self.dnbr_area[int(tx-40):int(tx+40),int(ty-40):int(ty+40)])
-		return np.nanpercentile(self.dnbr_area[int(ty-self.cw):int(ty+self.cw),int(tx-self.cw):int(tx+self.cw)],90)
+		return np.nanpercentile(self.dnbr_area[int(ty-self.cw):int(ty+self.cw),int(tx-self.cw):int(tx+self.cw)],95)
 		#try:
 		#	return np.nanmax(self.dnbr_area[int(ty-self.cw):int(ty+self.cw),int(tx-self.cw):int(tx+self.cw)])
 		#except ValueError:
@@ -79,36 +79,36 @@ class FireRegion(object):
 			index += 1
 		
 		#hs_cols = 9
-		#hs_h8[i,hs_cols + 1] = dval
-		#hs_h8[i,hs_cols + 2] = ndvival
-		#hs_h8[i,hs_cols + 3] = rawndvival
-		#hs_h8[i,hs_cols + 4] = dnbrval
-		#hs_h8[i,hs_cols + 5] = nbrval
-		#hs_h8[i,hs_cols + 6] = rawnbrval
-		#hs_h8[i,hs_cols + 7] = b4val
-		#hs_h8[i,hs_cols + 8] = b6val
-		#hs_h8[i,hs_cols + 9] = b7val
-		#hs_h8[i,hs_cols + 10] = b14val
-		#hs_h8[i,hs_cols + 11] = b4avgval
-		#hs_h8[i,hs_cols + 12] = b6avgval
-		#hs_h8[i,hs_cols + 13] = b7avgval
-		#hs_h8[i,hs_cols + 14] = b14avgval
-		#hs_h8[i,hs_cols + 15] = gross_val
-		#hs_h8[i,hs_cols + 16] = thin_val
-		#hs_h8[i,hs_cols + 17] = fog_val
-		#hs_h8[i,hs_cols + 18] = fog2_val
-		#hs_h8[i,hs_cols + 19] = daytime flag
-		#hs_h8[i,hs_cols + 20] = epochdelta
-		#hs_h8[i,hs_cols + 21] = row
-		#hs_h8[i,hs_cols + 22] = col
-		#hs_h8[i,hs_cols + 0] =  in date range of band data
+		#hs_cols + 1: dval
+		#hs_cols + 2: ndvival
+		#hs_cols + 3: rawndvival
+		#hs_cols + 4: dnbrval
+		#hs_cols + 5: nbrval
+		#hs_cols + 6: rawnbrval
+		#hs_cols + 7: b4val
+		#hs_cols + 8: b6val
+		#hs_cols + 9: b7val
+		#hs_cols + 10: b14val
+		#hs_cols + 11: b4avgval
+		#hs_cols + 12: b6avgval
+		#hs_cols + 13: b7avgval
+		#hs_cols + 14: b14avgval
+		#hs_cols + 15: gross_val
+		#hs_cols + 16: thin_val
+		#hs_cols + 17: fog_val
+		#hs_cols + 18: fog2_val
+		#hs_cols + 19: daytime flag
+		#hs_cols + 20: epochdelta
+		#hs_cols + 21: row
+		#hs_cols + 22: col
+		#hs_cols + 0:  in date range of band data
 		#X = hs_h8[:,[12,15]]
 		#X = hs_h8[:,[10,11,12,13,14,15,16,17,18,19,20,21,22,24]]
 		#X = hs_h8[:,[12,15,16,17,18,19,20,21,22,24]]
 		#self.X = self.hs_h8[:,[6,7,8,9,12,15,19,20,21,22,24]]
 		#self.X = self.hs_h8[:,[8,9,12,13,15,16,17,18,19,20,21,22,23,24,25,26,27]]
 		#self.X = self.hs_h8[:,[8,11,14,16,17,18,20,21,22,23,24,25,26]]
-		self.X = self.hs_h8[:,[8,9,11,14,17,21]]
+		self.X = self.hs_h8[:,[8,9,11,14,17,21,23,24,25,26]]
 		(xrows, xcols) = self.X.shape
 		rings = 3
 		ringradius = 2000
@@ -149,41 +149,41 @@ class FireRegion(object):
 		#self.W = np.absolute((np.clip(np.array([self.getdnbr(row[0],row[1]) for row in Yrows]),0,1) - self.dnbr_threshold) * (2*self.Y-1) * 0.5 + 0.5)
 		self.W = np.array([self.classConfidence(row[0],row[1],row[2]) for row in Yrows])
 
-regions = [FireRegion(hs_h8_file='WA_20160101_30_H8_ALBERS.csv',
+regions = [FireRegion(hs_h8_file='WA_20160101_30_H8_ALBERS_W.csv',
 		dnbr_fn='waroona_landsat_dnbr.txt',
 		dnbr_area_extents=[-1442387.5,-1530912.5,-3654112.5,-3708912.5],
 		fire_after=datestr2num('2016-01-06 08:12:00'),
 		nofire_before=datestr2num('2016-01-06 00:12:00')),
+	FireRegion(hs_h8_file='WA_20160101_30_H8_ALBERS_E.csv',
+		dnbr_fn='waroona_landsat_dnbr.txt',
+		dnbr_area_extents=[-1442387.5,-1530912.5,-3654112.5,-3708912.5],
+		fire_after=datestr2num('2016-01-06 08:12:00'),
+		nofire_before=datestr2num('2016-01-06 00:12:00')),
+	FireRegion(hs_h8_file='SA_regional_20151201_31_H8_ALBERS_W.csv',
+		dnbr_fn='sa_regional_subset_landsat_dnbr.txt',
+		dnbr_area_extents=[717437.5,567912.5,-3235887.5,-3380187.5],
+		fire_after= datestr2num('2015-12-02 04:00:00'),
+		nofire_before= datestr2num('2015-12-02 00:00:00')),
+	FireRegion(hs_h8_file='SA_regional_20151201_31_H8_ALBERS_E.csv',
+		dnbr_fn='sa_regional_subset_landsat_dnbr.txt',
+		dnbr_area_extents=[717437.5,567912.5,-3235887.5,-3380187.5],
+		fire_after= datestr2num('2015-12-02 04:00:00'),
+		nofire_before= datestr2num('2015-12-02 00:00:00')),
+	FireRegion(hs_h8_file='TAS_Jan01_21_H8_ALBERS_dt_W.csv',
+		dnbr_fn='tas_landsat_dnbr.txt',
+		dnbr_area_extents=[1159237.5,1074712.5,-4514812.5,-4598387.5],
+		fire_after= datestr2num('2016-01-14 04:12:00'),
+		nofire_before= datestr2num('2016-01-13 20:12:00')),
+	FireRegion(hs_h8_file='TAS_Jan01_21_H8_ALBERS_dt_E.csv',
+		dnbr_fn='tas_landsat_dnbr.txt',
+		dnbr_area_extents=[1159237.5,1074712.5,-4514812.5,-4598387.5],
+		fire_after= datestr2num('2016-01-14 04:12:00'),
+		nofire_before= datestr2num('2016-01-13 20:12:00')),
 	FireRegion(hs_h8_file='TAS_Jan01_21_H8_ALBERS_dt.csv',
 		dnbr_fn='tas_landsat_dnbr.txt',
 		dnbr_area_extents=[1159237.5,1074712.5,-4514812.5,-4598387.5],
 		fire_after= datestr2num('2016-01-14 04:12:00'),
 		nofire_before= datestr2num('2016-01-13 20:12:00')),
-	FireRegion(hs_h8_file='SA_regional_20151201_31_H8_ALBERS.csv',
-		dnbr_fn='sa_regional_subset_landsat_dnbr.txt',
-		dnbr_area_extents=[717437.5,567912.5,-3235887.5,-3380187.5],
-		fire_after= datestr2num('2015-12-02 04:00:00'),
-		nofire_before= datestr2num('2015-12-02 00:00:00'))
-	#FireRegion(hs_h8_file='SA_regional_20151201_31_H8_ALBERS.csv',
-	#	dnbr_fn='sa_regional_landsat_dnbr_1.txt',
-	#	dnbr_area_extents=[762237.5,512212.5,-3128537.5,-3353737.5],
-	#	fire_after= datestr2num('2015-12-02 04:38:00'), # Fixme when was the fire
-	#	nofire_before= datestr2num('2016-12-02 00:38:00')),
-	#FireRegion(hs_h8_file='SA_regional_20151201_31_H8_ALBERS.csv',
-	#	dnbr_fn='sa_regional_landsat_dnbr_2.txt',
-	#	dnbr_area_extents=[993362.5,739612.5,-3140512.5,-3369937.5],
-	#	fire_after= datestr2num('2015-12-12 04:12:00'), # Fixme when was the fire
-	#	nofire_before= datestr2num('2016-12-11 20:12:00')),
-	#FireRegion(hs_h8_file='SA_regional_20151201_31_H8_ALBERS.csv',
-	#	dnbr_fn='sa_regional_landsat_dnbr_3.txt',
-	#	dnbr_area_extents=[749762.5,503687.5,-3330212.5,-3554862.5],
-	#	fire_after= datestr2num('2015-12-02 04:38:00'), # Fixme when was the fire
-	#	nofire_before= datestr2num('2016-12-02 00:38:00')),
-	#FireRegion(hs_h8_file='SA_regional_20151201_31_H8_ALBERS.csv',
-	#	dnbr_fn='sa_regional_landsat_dnbr_4.txt',
-	#	dnbr_area_extents=[977112.5,727312.5,-3341962.5,-3570787.5],
-	#	fire_after= datestr2num('2015-12-12 04:12:00'), # Fixme when was the fire
-	#	nofire_before= datestr2num('2016-12-11 20:12:00'))
 	]
 
 for r in regions:
@@ -192,14 +192,14 @@ for r in regions:
 #action = 'pca'
 action = 'classify2'
 if action=='classify2':
-	train_rgn = regions[1] #Tas # Waroona
-	train_rgn2 = regions[0] # SA Regional subset
-	#train_rgn3 = regions[3] # SA Regional
-	#train_rgn4 = regions[4] # SA Regional
-	#train_rgn5 = regions[5] # SA Regional
-	test_rgn = regions[2] #Waroona# Tas
+	train_rgn = regions[0] #Waroona W
+	train_rgn2 = regions[2] # SA Regional subset W
+	train_rgn3 = regions[4] # TAS W
+	test_rgn2 = regions[1] #Waroona E
+	test_rgn = regions[3] # SA E
+	test_rgn3 = regions[5] # TAS E
+
 	# separate into train and test
-	#xrows,xcols = train_rgn.X.shape
 
 	traintestsel = 'wholearea'
 	#traintestsel = 'randmixed'
@@ -220,19 +220,13 @@ if action=='classify2':
 		Ytest = np.delete(Y,test_l,axis=0)
 		Wtest = np.delete(W,test_l,axis=0)
 	else:
-		#Xtrain = train_rgn.X
-		#Ytrain = train_rgn.Y
-		#Wtrain = train_rgn.W
-		#Xtrain = np.concatenate((train_rgn.X,train_rgn2.X,train_rgn3.X,train_rgn4.X,train_rgn5.X),axis=0)
-		#Ytrain = np.concatenate((train_rgn.Y,train_rgn2.Y,train_rgn3.Y,train_rgn4.Y,train_rgn5.Y),axis=0)
-		#Wtrain = np.concatenate((train_rgn.W,train_rgn2.W,train_rgn3.W,train_rgn4.W,train_rgn5.W),axis=0)
-		Xtrain = np.concatenate((train_rgn.X,train_rgn2.X),axis=0)
-		Ytrain = np.concatenate((train_rgn.Y,train_rgn2.Y),axis=0)
-		Wtrain = np.concatenate((train_rgn.W,train_rgn2.W),axis=0)
+		Xtrain = np.concatenate((train_rgn.X,train_rgn2.X,train_rgn3.X),axis=0)
+		Ytrain = np.concatenate((train_rgn.Y,train_rgn2.Y,train_rgn3.Y),axis=0)
+		Wtrain = np.concatenate((train_rgn.W,train_rgn2.W,train_rgn3.W),axis=0)
 		
-		Xtest = test_rgn.X
-		Ytest = test_rgn.Y
-		Wtest = test_rgn.W
+		Xtest = np.concatenate((test_rgn.X,test_rgn2.X,test_rgn3.X),axis=0)
+		Ytest = np.concatenate((test_rgn.Y,test_rgn2.Y,test_rgn3.Y),axis=0)
+		Wtest = np.concatenate((test_rgn.W,test_rgn2.W,test_rgn3.W),axis=0)
 
 	print "Train size " + str(len(Xtrain)) + " " + str(len(Ytrain))
 
@@ -252,19 +246,19 @@ if action=='classify2':
 	#clsfr = BaggingClassifier(linear_model.LogisticRegression(C=1e2),n_estimators=100,bootstrap_features=False)
 	#clsfr = BaggingClassifier(SVC(verbose=True,probability=True),n_estimators=100,bootstrap_features=False)
 	#clsfr = AdaBoostClassifier(SVC(verbose=True,probability=True),n_estimators=50)
-	clsfr = GradientBoostingClassifier(n_estimators=10000, learning_rate=0.3, max_depth=3, random_state=0)
+	#clsfr = GradientBoostingClassifier(n_estimators=10000, learning_rate=0.3, max_depth=3, random_state=0)
 	#clsfr = DecisionTreeClassifier(random_state=0)
 	#clsfr = SVC(kernel='linear',degree=3,verbose=True,probability=True)
-	#clsfr = SVC(verbose=True,probability=True)
+	clsfr = SVC(verbose=True,probability=True)
 	#clsfr = RandomForestClassifier(verbose=True)
 	#clsfr = MLPClassifier(solver='lbfgs',verbose=True)
 
 	clsfr.fit(Xtrain, Ytrain, sample_weight=Wtrain)
+	#clsfr.fit(Xtrain, Ytrain)
 	print "Classes: " + str(clsfr.classes_)
 
 	print "Score: " + str(clsfr.score(Xtest,Ytest))
 
-	#clsfr.fit(Xtrain, Ytrain)
 	Ypred_class_prob = clsfr.predict_proba(Xtest)
 	Ypred_classification = clsfr.predict(Xtest)
 	#print Ypred_class_prob
@@ -303,20 +297,10 @@ if action=='classify2':
 	#f, ((ax1,ax2),(ax3,ax4), (ax5,ax6)) = plt.subplots(3,2)
 	f, ((ax1,ax2),(ax3,ax4)) = plt.subplots(2,2)
 
-	#ax3.scatter(np.arange(len(Ytest)),Ytest,c='navy',label='Test')
-	#ax3.scatter(np.arange(len(Ypred)),Ypred,c='darkorange',label='Predicted')
-	#ax3.scatter(Ytest,Ypred,c=np.square(Ytest-Ypred),label='Test')
-	#ax3.set_title('Classification')
-	#ax3.legend(loc='lower right')
-
 	ax3.hist(Ypred_1_true,10)
 	ax3.set_title('True Positive Rate')
 	ax4.hist(Ypred_0_true,10)
 	ax4.set_title('True Negative Rate')
-	#ax5.hist(Ypred_1,10)
-	#ax5.set_title('Probabilities of Positive Classification')
-	#ax6.hist(Ypred_0,10)
-	#ax6.set_title('Probabilities of Negative Classification')
 
 	fpr,tpr,thresholds = metrics.roc_curve(Ytest,Ypred_1,pos_label=1,drop_intermediate=False)
 	roc_auc = metrics.auc(fpr,tpr)

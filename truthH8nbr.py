@@ -7,19 +7,32 @@ from matplotlib import gridspec
 from matplotlib import animation
 from matplotlib import colors
 from matplotlib.dates import datestr2num, num2date
+from datetime import datetime
 import bisect
 
 i=0
 
 #WA
-#dr='/g/data/r78/lsd547/H8/WA2/2016/01/'
+#dr='/g/data/r78/lsd547/H8/WA2/'
 #hs_h8_file='WA_20160101_30_H8_ALBERS.csv'
 #hs_MODIS_file='WA_jan2016_MODIS_VIIRS_ALBERS.csv'
+#doys=(1,2,3,4,5,6,7,8,9,10)
+#year='2016'
 
 #TAS
-dr='/g/data/r78/lsd547/H8/TAS/2016/01/'
+dr='/g/data/r78/lsd547/H8/TAS/'
 hs_MODIS_file='TAS_20160113_30_MODIS_ALBERS.csv'
 hs_h8_file='TAS_Jan01_21_H8_ALBERS_dt.csv'
+doys=(10,11,12,13,14,15,16,17,18)
+year='2016'
+
+#SA regional dec 2015
+#dr='/g/data/r78/lsd547/H8/SA_regional/'
+#hs_MODIS_file='dummy_MODIS_ALBERS.csv'
+#hs_h8_file='SA_regional_20151201_31_H8_ALBERS.csv'
+#days=xrange(1,10) #(335,366)
+#year='2015'
+#doys=range(335-5,335+6)
 
 #rast_arr = []
 arr_arr = []
@@ -61,27 +74,27 @@ cols = 0
 rows = 0
 geotransform = None
 
-#days=(1,2)
-#WA
-#days=(1,2,3,4,5,6,7,8,9,10)
-#TAS
-days=(10,11,12,13,14,15,16,17,18)
 
-for day in days:
+for doy in doys:
+	# compute day and month
+	dt = datetime.strptime('%s%03d'%(year,doy), '%Y%j')
+	month = dt.month
+	day = dt.day
 	for hour in range(24):
 		for tenminute in range(6):
 			minute = tenminute * 10
 			
 			#fn = '20160106_1910_B07_Aus.tif'
-			fn = '%02d/201601%02d_%02d%02d_NBR.tif'%(day,day,hour,minute)
-			b3fn = '%02d/201601%02d_%02d%02d_B03_Aus.tif'%(day,day,hour,minute)
-			b4fn = '%02d/201601%02d_%02d%02d_B04_Aus.tif'%(day,day,hour,minute)
-			b6fn = '%02d/201601%02d_%02d%02d_B06_Aus.tif'%(day,day,hour,minute)
-			b11fn = '%02d/201601%02d_%02d%02d_B11_Aus.tif'%(day,day,hour,minute)
-			b14fn = '%02d/201601%02d_%02d%02d_B14_Aus.tif'%(day,day,hour,minute)
-			b15fn = '%02d/201601%02d_%02d%02d_B15_Aus.tif'%(day,day,hour,minute)
-			b13fn = '%02d/201601%02d_%02d%02d_B13_Aus.tif'%(day,day,hour,minute)
-			b7fn = '%02d/201601%02d_%02d%02d_B07_Aus.tif'%(day,day,hour,minute)
+			prefixpath = '%s/%02d/%02d/%s%02d%02d_%02d%02d'%(year,month,day,year,month,day,hour,minute)
+			fn = '%s_NBR.tif'%(prefixpath)
+			b3fn  = '%s_B03_Aus.tif'%(prefixpath)
+			b4fn  = '%s_B04_Aus.tif'%(prefixpath)
+			b6fn  = '%s_B06_Aus.tif'%(prefixpath)
+			b7fn  = '%s_B07_Aus.tif'%(prefixpath)
+			b11fn = '%s_B11_Aus.tif'%(prefixpath)
+			b13fn = '%s_B13_Aus.tif'%(prefixpath)
+			b14fn = '%s_B14_Aus.tif'%(prefixpath)
+			b15fn = '%s_B15_Aus.tif'%(prefixpath)
 			print 'opening ' + dr + fn
 			try:
 				#B13
@@ -182,6 +195,7 @@ B14_avg = np.ma.median(b14arr_arr[0:700],axis=0)
 B11_avg = np.ma.median(b11arr_arr[0:700],axis=0)
 B15_avg = np.ma.median(b15arr_arr[0:700],axis=0)
 B07_avg = np.ma.median(b07arr_arr[0:700],axis=0)
+B06_avg = np.ma.median(b06arr_arr[0:700],axis=0)
 for i,b14 in enumerate(b14arr_arr):
 	#srt = np.clip(np.divide(B03_avg,b3),0,1)
 	#singlerefl_arr.append(srt)
@@ -232,13 +246,18 @@ for i,b14 in enumerate(b14arr_arr):
 
 	#mndviavg = np.divide((b04arr_arr[i] - b07arr_arr[i]),(B04_avg - B07_avg))
 	#mndviavg = np.divide(b04arr_arr[i]- b07arr_arr[i] - (B04_avg - B07_avg),b04arr_arr[i]+ b07arr_arr[i] + (B04_avg - B07_avg))
-	mndviavg = np.divide(b04arr_arr[i]- b07arr_arr[i], (B04_avg + B07_avg))
+
+	#mndviavg = np.divide(b04arr_arr[i]- b07arr_arr[i], (B04_avg + B07_avg))
 	#if not np.isfinite(arr_arr[i]).all():
 	#	mndviavg[0,0] = np.nan
 	#mndviavg_arr.append(mndviavg)
+	# For now, compute actual NDVI and then just store avg for classifiers
+	mndviavg = np.divide(b04arr_arr[i]- b07arr_arr[i], b04arr_arr[i] + b07arr_arr[i])
 	ndvi_arr.append(mndviavg)
 
-	mnbravg = np.divide(b04arr_arr[i]- b06arr_arr[i], (B04_avg + B06_avg))
+	#mnbravg = np.divide(b04arr_arr[i]- b06arr_arr[i], (B04_avg + B06_avg))
+	# For now, compute actual NBR and then just store avg for classifiers
+	mnbravg = np.divide(b04arr_arr[i]- b06arr_arr[i], b04arr_arr[i] + b06arr_arr[i])
 	nbr_arr.append(mnbravg)
 	
 emin = 2.7 * 3
@@ -419,107 +438,118 @@ def floatOrBlank(st):
 
 modis_file_cols = (0,1,8,9,2,4,15,16,17,18,19,20,21) # TAS
 hs_MODIS = np.loadtxt(hs_MODIS_file,skiprows=1,delimiter=',',usecols=modis_file_cols, converters={4:sv2num,8:utc2num,9:utc2num,17:floatOrBlank,18:utc2num,19:floatOrBlank,20:floatOrBlank}) # X, Y, start_dt, end_dt, id, satellite_, lat, lon, temp_K, datetime, power, confidence, age_hours 
-
-hs_MODIS[hs_MODIS[:,2].argsort()] #3rd column is start_dt
-hs_MODIS_radius = 0.5 * 500.0 / 1000.0
-(hs_rows,hs_cols) = hs_MODIS.shape
-hs_MODIS = np.concatenate((hs_MODIS,np.zeros((hs_rows,18))),axis=1)
-synth_MODIS = []
-for i in xrange(hs_rows):
-	# Find dNBR by epoch and pixel
-	# float search - substract tiny number and bisect left to get insertion index
-	row = 1.0 * (hs_MODIS[i,1] - originY) / pixelHeight
-	col = 1.0 * (hs_MODIS[i,0] - originX) / pixelWidth
-	if 0 <= row < rows and 0 <= col <= cols:
-		nearest_epoch_idx = bisect.bisect_left(epoch_arr,hs_MODIS[i,9]-0.00001)
-		#print "Nearest epoch idx = " + str(nearest_epoch_idx)
-		tenmin = math.fmod(hs_MODIS[i,9],1.0) * 144
-		if nearest_epoch_idx >= len(dndvi_arr) or nearest_epoch_idx < 0:
-			hs_MODIS[i,hs_cols + 0] = 0
-		else:
-			if 11*6 <= tenmin <= 21*6 + 2:
-				hs_MODIS[i,hs_cols + 14] = 0 # daytime flag
+if hs_MODIS.size > 0:
+	hs_MODIS[hs_MODIS[:,2].argsort()] #3rd column is start_dt
+	hs_MODIS_radius = 0.5 * 500.0 / 1000.0
+	(hs_rows,hs_cols) = hs_MODIS.shape
+	hs_MODIS = np.concatenate((hs_MODIS,np.zeros((hs_rows,23))),axis=1)
+	synth_MODIS = []
+	for i in xrange(hs_rows):
+		# Find dNBR by epoch and pixel
+		# float search - substract tiny number and bisect left to get insertion index
+		row = 1.0 * (hs_MODIS[i,1] - originY) / pixelHeight
+		col = 1.0 * (hs_MODIS[i,0] - originX) / pixelWidth
+		if 0 <= row < rows and 0 <= col <= cols:
+			nearest_epoch_idx = bisect.bisect_left(epoch_arr,hs_MODIS[i,9]-0.00001)
+			#print "Nearest epoch idx = " + str(nearest_epoch_idx)
+			tenmin = math.fmod(hs_MODIS[i,9],1.0) * 144
+			if nearest_epoch_idx >= len(dndvi_arr) or nearest_epoch_idx < 0:
+				hs_MODIS[i,hs_cols + 0] = 0
 			else:
-				hs_MODIS[i,hs_cols + 14] = 1 # daytime flag
-			hs_show_arr[nearest_epoch_idx].append((hs_MODIS[i,0],hs_MODIS[i,1],19)) #[0.0,0.0,1.0,0.5])) # 'b'
-			hs_MODIS[i,hs_cols + 0] = 1
-			#epochdelta = abs(epoch_arr[nearest_epoch_idx] - hs_MODIS[i,9])
-			epochdelta = epoch_arr[nearest_epoch_idx] - hs_MODIS[i,9]
-			hs_MODIS[i,hs_cols + 15] = epochdelta # daytime flag
-			#if epochdelta < 0.5/144: # five minute difference
-			d = dndvi_arr[nearest_epoch_idx]
-			hs_MODIS[i,hs_cols + 16] = row
-			hs_MODIS[i,hs_cols + 17] = col
-			#c_val = cloud_arr[nearest_epoch_idx][int(row),int(col)]
-			dval = dndvi_arr[nearest_epoch_idx][int(row),int(col)]
-			ndvival = kfndvi_arr[nearest_epoch_idx][int(row),int(col)]
-			rawndvival = ndvi_arr[nearest_epoch_idx][int(row),int(col)]
-			nbrval = kfnbr_arr[nearest_epoch_idx][int(row),int(col)]
-			dnbrval = dnbr_arr[nearest_epoch_idx][int(row),int(col)]
-			rawnbrval = nbr_arr[nearest_epoch_idx][int(row),int(col)]
-			b7val = b07arr_arr[nearest_epoch_idx][int(row),int(col)]
-			b6val = b06arr_arr[nearest_epoch_idx][int(row),int(col)]
-			b14val = b14arr_arr[nearest_epoch_idx][int(row),int(col)]
-			gross_val = gross_arr[nearest_epoch_idx][int(row),int(col)]
-			thin_val = thin_arr[nearest_epoch_idx][int(row),int(col)]
-			fog_val = fog_arr[nearest_epoch_idx][int(row),int(col)]
-			fog2_val = fog2_arr[nearest_epoch_idx][int(row),int(col)]
-			hs_MODIS[i,hs_cols + 1] = dval
-			hs_MODIS[i,hs_cols + 2] = ndvival
-			hs_MODIS[i,hs_cols + 3] = rawndvival
-			hs_MODIS[i,hs_cols + 4] = dnbrval
-			hs_MODIS[i,hs_cols + 5] = nbrval
-			hs_MODIS[i,hs_cols + 6] = rawnbrval
-			hs_MODIS[i,hs_cols + 7] = b6val
-			hs_MODIS[i,hs_cols + 8] = b7val
-			hs_MODIS[i,hs_cols + 9] = b14val
-			hs_MODIS[i,hs_cols + 10] = gross_val
-			hs_MODIS[i,hs_cols + 11] = thin_val
-			hs_MODIS[i,hs_cols + 12] = fog_val
-			hs_MODIS[i,hs_cols + 13] = fog2_val
-			# Now sample dnbr between Jan 01 and Jan 04 2016 daytime only
-			rand_epoch_idx = 0
-			while True:
-				#tenmin = np.random.randint(0,14*6-3)
-				#if tenmin >= 11*6:
-				#	tenmin += 10*6+3
-				hour = int(tenmin / 6)
-				minute = int(tenmin % 6) * 10
-				rand_epoch = utc2num('2016-01-%02d %02d:%02d:00'%(np.random.randint(1,5),hour,minute))
-				rand_epoch_idx = bisect.bisect_left(epoch_arr,rand_epoch - 0.00001)
-				if rand_epoch_idx < len(dndvi_arr):
-					#rand_epoch_idx = np.random.randint(0,568) # 4 days
-					dval = dndvi_arr[rand_epoch_idx][int(row),int(col)]
-					ndvival = kfndvi_arr[rand_epoch_idx][int(row),int(col)]
-					rawndvival = ndvi_arr[rand_epoch_idx][int(row),int(col)]
-					nbrval = kfnbr_arr[rand_epoch_idx][int(row),int(col)]
-					dnbrval = dnbr_arr[rand_epoch_idx][int(row),int(col)]
-					rawnbrval = nbr_arr[rand_epoch_idx][int(row),int(col)]
-					b7val = b07arr_arr[rand_epoch_idx][int(row),int(col)]
-					b6val = b06arr_arr[rand_epoch_idx][int(row),int(col)]
-					b14val = b14arr_arr[rand_epoch_idx][int(row),int(col)]
-					gross_val = gross_arr[rand_epoch_idx][int(row),int(col)]
-					thin_val = thin_arr[rand_epoch_idx][int(row),int(col)]
-					fog_val = fog_arr[rand_epoch_idx][int(row),int(col)]
-					fog2_val = fog2_arr[rand_epoch_idx][int(row),int(col)]
-					# Now sample dnbr between Jan 01 and Jan 04 2016
-					synth_MODIS.append([hs_MODIS[i,0],hs_MODIS[i,1],rand_epoch,dval,ndvival,rawndvival,dnbrval,nbrval,rawnbrval,b6val,b7val,b14val,gross_val,thin_val,fog_val,fog2_val,row,col])
-					hs_show_arr[rand_epoch_idx].append((hs_MODIS[i,0],hs_MODIS[i,1],0)) #[0.0,0.0,1.0,0.5])) # 'b'
-					break
-	else:
-		hs_MODIS[i,hs_cols + 0] = 0
-		hs_MODIS[i,hs_cols + 1] = -9999
-		continue
-
-np.savetxt('dnbr_'+hs_MODIS_file,hs_MODIS,delimiter=',')
-np.savetxt('dnbr_synth_'+hs_MODIS_file,np.array(synth_MODIS),delimiter=',')
+				if 11*6 <= tenmin <= 21*6 + 2:
+					hs_MODIS[i,hs_cols + 19] = 0 # daytime flag
+				else:
+					hs_MODIS[i,hs_cols + 19] = 1 # daytime flag
+				hs_show_arr[nearest_epoch_idx].append((hs_MODIS[i,0],hs_MODIS[i,1],19)) #[0.0,0.0,1.0,0.5])) # 'b'
+				hs_MODIS[i,hs_cols + 0] = 1
+				#epochdelta = abs(epoch_arr[nearest_epoch_idx] - hs_MODIS[i,9])
+				epochdelta = epoch_arr[nearest_epoch_idx] - hs_MODIS[i,9]
+				hs_MODIS[i,hs_cols + 20] = epochdelta # daytime flag
+				#if epochdelta < 0.5/144: # five minute difference
+				d = dndvi_arr[nearest_epoch_idx]
+				hs_MODIS[i,hs_cols + 21] = row
+				hs_MODIS[i,hs_cols + 22] = col
+				#c_val = cloud_arr[nearest_epoch_idx][int(row),int(col)]
+				dval = dndvi_arr[nearest_epoch_idx][int(row),int(col)]
+				ndvival = kfndvi_arr[nearest_epoch_idx][int(row),int(col)]
+				rawndvival = ndvi_arr[nearest_epoch_idx][int(row),int(col)]
+				nbrval = kfnbr_arr[nearest_epoch_idx][int(row),int(col)]
+				dnbrval = dnbr_arr[nearest_epoch_idx][int(row),int(col)]
+				rawnbrval = nbr_arr[nearest_epoch_idx][int(row),int(col)]
+				b4val = b04arr_arr[nearest_epoch_idx][int(row),int(col)]
+				b7val = b07arr_arr[nearest_epoch_idx][int(row),int(col)]
+				b6val = b06arr_arr[nearest_epoch_idx][int(row),int(col)]
+				b14val = b14arr_arr[nearest_epoch_idx][int(row),int(col)]
+				gross_val = gross_arr[nearest_epoch_idx][int(row),int(col)]
+				thin_val = thin_arr[nearest_epoch_idx][int(row),int(col)]
+				fog_val = fog_arr[nearest_epoch_idx][int(row),int(col)]
+				fog2_val = fog2_arr[nearest_epoch_idx][int(row),int(col)]
+				hs_MODIS[i,hs_cols + 1] = dval
+				hs_MODIS[i,hs_cols + 2] = ndvival
+				hs_MODIS[i,hs_cols + 3] = rawndvival
+				hs_MODIS[i,hs_cols + 4] = dnbrval
+				hs_MODIS[i,hs_cols + 5] = nbrval
+				hs_MODIS[i,hs_cols + 6] = rawnbrval
+				hs_MODIS[i,hs_cols + 7] = b4val
+				hs_MODIS[i,hs_cols + 8] = b6val
+				hs_MODIS[i,hs_cols + 9] = b7val
+				hs_MODIS[i,hs_cols + 10] = b14val
+				hs_MODIS[i,hs_cols + 11] = B04_avg[int(row),int(col)]
+				hs_MODIS[i,hs_cols + 12] = B06_avg[int(row),int(col)]
+				hs_MODIS[i,hs_cols + 13] = B07_avg[int(row),int(col)]
+				hs_MODIS[i,hs_cols + 14] = B14_avg[int(row),int(col)]
+				hs_MODIS[i,hs_cols + 15] = gross_val
+				hs_MODIS[i,hs_cols + 16] = thin_val
+				hs_MODIS[i,hs_cols + 17] = fog_val
+				hs_MODIS[i,hs_cols + 18] = fog2_val
+				# Now sample dnbr between Jan 01 and Jan 04 2016 daytime only
+				rand_epoch_idx = 0
+				while True:
+					#tenmin = np.random.randint(0,14*6-3)
+					#if tenmin >= 11*6:
+					#	tenmin += 10*6+3
+					hour = int(tenmin / 6)
+					minute = int(tenmin % 6) * 10
+					rand_epoch = utc2num('2016-01-%02d %02d:%02d:00'%(np.random.randint(1,5),hour,minute))
+					rand_epoch_idx = bisect.bisect_left(epoch_arr,rand_epoch - 0.00001)
+					if rand_epoch_idx < len(dndvi_arr):
+						#rand_epoch_idx = np.random.randint(0,568) # 4 days
+						dval = dndvi_arr[rand_epoch_idx][int(row),int(col)]
+						ndvival = kfndvi_arr[rand_epoch_idx][int(row),int(col)]
+						rawndvival = ndvi_arr[rand_epoch_idx][int(row),int(col)]
+						nbrval = kfnbr_arr[rand_epoch_idx][int(row),int(col)]
+						dnbrval = dnbr_arr[rand_epoch_idx][int(row),int(col)]
+						rawnbrval = nbr_arr[rand_epoch_idx][int(row),int(col)]
+						b4val = b04arr_arr[rand_epoch_idx][int(row),int(col)]
+						b7val = b07arr_arr[rand_epoch_idx][int(row),int(col)]
+						b6val = b06arr_arr[rand_epoch_idx][int(row),int(col)]
+						b14val = b14arr_arr[rand_epoch_idx][int(row),int(col)]
+						B04avgval = B04_avg[int(row),int(col)]
+						B06avgval = B06_avg[int(row),int(col)]
+						B07avgval = B07_avg[int(row),int(col)]
+						B14avgval = B14_avg[int(row),int(col)]
+						gross_val = gross_arr[rand_epoch_idx][int(row),int(col)]
+						thin_val = thin_arr[rand_epoch_idx][int(row),int(col)]
+						fog_val = fog_arr[rand_epoch_idx][int(row),int(col)]
+						fog2_val = fog2_arr[rand_epoch_idx][int(row),int(col)]
+						# Now sample dnbr between Jan 01 and Jan 04 2016
+						synth_MODIS.append([hs_MODIS[i,0],hs_MODIS[i,1],rand_epoch,dval,ndvival,rawndvival,dnbrval,nbrval,rawnbrval,b4val,b6val,b7val,b14val,B04avgval,B06avgval,B07avgval,B14avgval,gross_val,thin_val,fog_val,fog2_val,row,col])
+						hs_show_arr[rand_epoch_idx].append((hs_MODIS[i,0],hs_MODIS[i,1],0)) #[0.0,0.0,1.0,0.5])) # 'b'
+						break
+		else:
+			hs_MODIS[i,hs_cols + 0] = 0
+			hs_MODIS[i,hs_cols + 1] = -9999
+			continue
+	
+	np.savetxt('dnbr_m_'+hs_MODIS_file,hs_MODIS,delimiter=',')
+	np.savetxt('dnbr_synth_m_'+hs_MODIS_file,np.array(synth_MODIS),delimiter=',')
 	
 # H8 Hotspots
 # X,Y,Datetime,Lat,Lon,FRP(mw),Firesize(km^2),temp(k),Category,Description
 hs_h8 = np.loadtxt(hs_h8_file,skiprows=1,delimiter=',',usecols=(0,1,2,3,4,5,6,7,8),converters={2:datestr2num})
 hs_h8[hs_h8[:,2].argsort()] #3rd column is utc time
 (hs_rows,hs_cols) = hs_h8.shape
-hs_h8 = np.concatenate((hs_h8,np.zeros((hs_rows,18))),axis=1)
+hs_h8 = np.concatenate((hs_h8,np.zeros((hs_rows,23))),axis=1)
 #hs_h8_epochs = [r[2] for r in hs_h8]
 hs_h8_radius = 0.5 * 2000.0 / 1000.0
 for i in xrange(hs_rows):
@@ -538,14 +568,14 @@ for i in xrange(hs_rows):
 	epochdelta =  hs_h8[i,2] - epoch_arr[nearest_epoch_idx]
 	row = 1.0 * (hs_h8[i,1] - originY) / pixelHeight
 	col = 1.0 * (hs_h8[i,0] - originX) / pixelWidth
-	hs_h8[i,hs_cols + 17] = row
-	hs_h8[i,hs_cols + 16] = col
-	hs_h8[i,hs_cols + 15] = epochdelta
+	hs_h8[i,hs_cols + 20] = epochdelta
+	hs_h8[i,hs_cols + 21] = row
+	hs_h8[i,hs_cols + 22] = col
 	tenmin = math.fmod(hs_h8[i,2],1.0) * 144
 	if 11*6 <= tenmin <= 21*6 + 2:
-		hs_h8[i,hs_cols + 14] = 0 # daytime flag
+		hs_h8[i,hs_cols + 19] = 0 # daytime flag
 	else:
-		hs_h8[i,hs_cols + 14] = 1 # daytime flag
+		hs_h8[i,hs_cols + 19] = 1 # daytime flag
 	if 0 <= row < rows and 0 <= col <= cols:
 		#d = dndvi_arr[nearest_epoch_idx]
 		#dval = d[int(row),int(col)]
@@ -566,6 +596,7 @@ for i in xrange(hs_rows):
 		nbrval = kfnbr_arr[nearest_epoch_idx][int(row),int(col)]
 		dnbrval = dnbr_arr[nearest_epoch_idx][int(row),int(col)]
 		rawnbrval = nbr_arr[nearest_epoch_idx][int(row),int(col)]
+		b4val = b04arr_arr[nearest_epoch_idx][int(row),int(col)]
 		b7val = b07arr_arr[nearest_epoch_idx][int(row),int(col)]
 		b6val = b06arr_arr[nearest_epoch_idx][int(row),int(col)]
 		b14val = b14arr_arr[nearest_epoch_idx][int(row),int(col)]
@@ -579,13 +610,18 @@ for i in xrange(hs_rows):
 		hs_h8[i,hs_cols + 4] = dnbrval
 		hs_h8[i,hs_cols + 5] = nbrval
 		hs_h8[i,hs_cols + 6] = rawnbrval
-		hs_h8[i,hs_cols + 7] = b6val
-		hs_h8[i,hs_cols + 8] = b7val
-		hs_h8[i,hs_cols + 9] = b14val
-		hs_h8[i,hs_cols + 10] = gross_val
-		hs_h8[i,hs_cols + 11] = thin_val
-		hs_h8[i,hs_cols + 12] = fog_val
-		hs_h8[i,hs_cols + 13] = fog2_val
+		hs_h8[i,hs_cols + 7] = b4val
+		hs_h8[i,hs_cols + 8] = b6val
+		hs_h8[i,hs_cols + 9] = b7val
+		hs_h8[i,hs_cols + 10] = b14val
+		hs_h8[i,hs_cols + 11] = B04_avg[int(row),int(col)]
+		hs_h8[i,hs_cols + 12] = B06_avg[int(row),int(col)]
+		hs_h8[i,hs_cols + 13] = B07_avg[int(row),int(col)]
+		hs_h8[i,hs_cols + 14] = B14_avg[int(row),int(col)]
+		hs_h8[i,hs_cols + 15] = gross_val
+		hs_h8[i,hs_cols + 16] = thin_val
+		hs_h8[i,hs_cols + 17] = fog_val
+		hs_h8[i,hs_cols + 18] = fog2_val
 	else:
 		hs_h8[i,hs_cols + 0] = 0
 		#hs_h8[i,10] = -9999
@@ -679,8 +715,8 @@ print i
 
 interval = 200
 # Bind our grid to the identifier X in the animate function's namespace.
-#Writer = animation.writers['ffmpeg']
-#writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
+Writer = animation.writers['ffmpeg']
+writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
 anim = animation.FuncAnimation(fig, animate, interval=interval, repeat=False, frames=len(dndvi_arr))
-#anim.save('dnbr_filtered_w_hs_synth.mp4',writer=writer)
+anim.save('dnbr_filtered_w_hs_synth_tas.mp4',writer=writer)
 plt.show()

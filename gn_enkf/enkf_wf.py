@@ -23,7 +23,6 @@ from matplotlib.dates import datestr2num, num2date
 import gdal
 import sys
 import os
-#from filterpy.kalman import EnsembleKalmanFilter as EnKF
 import bisect
 from datetime import datetime, timedelta
 
@@ -127,48 +126,48 @@ def floatOrBlank(st):
 
 # Spatial perturbations: create a "Kernel" of 7x7 spatial perturbations with the centre being 0,0
 
-def makeSimPlotWindow(s,s0):
-	global fig, gs, imS, imT, imS0, imT0, ttl
-	(T,S,V) = (s.T, s.S, s.V)
-	fig = plt.figure(figsize=(50/3, 12.5))
-	gs = gridspec.GridSpec(2,2, width_ratios=[1,1])
-	# FIXME remove animation and write images to disk if desired
-	axS = fig.add_subplot(gs[0,0])
-	axS.set_axis_off()
-	axT = fig.add_subplot(gs[0,1])
-	axT.set_axis_off()
-	axS0 = fig.add_subplot(gs[1,0])
-	axS0.set_axis_off()
-	axT0 = fig.add_subplot(gs[1,1])
-	axT0.set_axis_off()
-	imS = axS.imshow(S, cmap='gray', vmin=0, vmax=1, interpolation='none')#, interpolation='nearest')
-	imT = axT.imshow(T, cmap='jet', vmin=WF._Tal, vmax=1000, interpolation='none')#, interpolation='nearest')
-	imS0 = axS0.imshow(s0.S, cmap='gray', vmin=0, vmax=1, interpolation='none')#, interpolation='nearest')
-	imT0 = axT0.imshow(s0.T, cmap='jet', vmin=WF._Tal, vmax=1000, interpolation='none')#, interpolation='nearest')
-	ttl = axS.text(.5, 1.05, '', transform = axS.transAxes, va='center')
-	plt.tight_layout(pad=0.1, w_pad=0.1, h_pad=0.1)
-	#plt.ion()
-	#plt.show()
-	#plt.draw()
-	#plt.pause(0.05)
-	#plt.savefig('start.png')
-	#plt.close()
+#def makeSimPlotWindow(s,s0):
+#	global fig, gs, imS, imT, imS0, imT0, ttl
+#	(T,S,V) = (s.T, s.S, s.V)
+#	fig = plt.figure(figsize=(50/3, 12.5))
+#	gs = gridspec.GridSpec(2,2, width_ratios=[1,1])
+#	# FIXME remove animation and write images to disk if desired
+#	axS = fig.add_subplot(gs[0,0])
+#	axS.set_axis_off()
+#	axT = fig.add_subplot(gs[0,1])
+#	axT.set_axis_off()
+#	axS0 = fig.add_subplot(gs[1,0])
+#	axS0.set_axis_off()
+#	axT0 = fig.add_subplot(gs[1,1])
+#	axT0.set_axis_off()
+#	imS = axS.imshow(S, cmap='gray', vmin=0, vmax=1, interpolation='none')#, interpolation='nearest')
+#	imT = axT.imshow(T, cmap='jet', vmin=WF._Tal, vmax=1000, interpolation='none')#, interpolation='nearest')
+#	imS0 = axS0.imshow(s0.S, cmap='gray', vmin=0, vmax=1, interpolation='none')#, interpolation='nearest')
+#	imT0 = axT0.imshow(s0.T, cmap='jet', vmin=WF._Tal, vmax=1000, interpolation='none')#, interpolation='nearest')
+#	ttl = axS.text(.5, 1.05, '', transform = axS.transAxes, va='center')
+#	plt.tight_layout(pad=0.1, w_pad=0.1, h_pad=0.1)
+#	#plt.ion()
+#	#plt.show()
+#	#plt.draw()
+#	#plt.pause(0.05)
+#	#plt.savefig('start.png')
+#	#plt.close()
+#
+#def plotState2(s,s0,e):
+#	global fig, gs, imS, imT, imS0, imT0, ttl
+#	#makeSimPlotWindow(s,s0)
+#	imS.set_data(s.S)
+#	imT.set_data(s.T)
+#	imS0.set_data(s0.S)
+#	imT0.set_data(s0.T)
+#	ttl.set_text('Iteration: %d, Wind velocity = (%f, %f), Epoch = %s'%(s.Iter,s.V[0],s.V[1],e))
+#	#plt.draw()
+#	plt.pause(0.05)
+#	#time.sleep(1)
+#	plt.savefig('out_' + str(e) + '.png')
+#	plt.close()
 
-def plotState2(s,s0,e):
-	global fig, gs, imS, imT, imS0, imT0, ttl
-	#makeSimPlotWindow(s,s0)
-	imS.set_data(s.S)
-	imT.set_data(s.T)
-	imS0.set_data(s0.S)
-	imT0.set_data(s0.T)
-	ttl.set_text('Iteration: %d, Wind velocity = (%f, %f), Epoch = %s'%(s.Iter,s.V[0],s.V[1],e))
-	#plt.draw()
-	plt.pause(0.05)
-	#time.sleep(1)
-	plt.savefig('out_' + str(e) + '.png')
-	plt.close()
-
-def plotState(s,sigmas_,e):
+def plotState_w_sigmas(s,sigmas_,e):
 	fig = plt.figure(figsize=(12, 12),dpi=72)
 	N_ = len(sigmas_)
 	sqrtN_ = int(math.sqrt(N_))
@@ -200,6 +199,32 @@ def plotState(s,sigmas_,e):
 	fig.clf()
 	plt.close('all')
 	del fig, axS, axS_, axT, axT_, imS, imT, imS_, imT_, ttl
+
+def plotState(s,sv,mae,e):
+	fig = plt.figure(figsize=(12, 12),dpi=72)
+	gs = gridspec.GridSpec(2,2) #, width_ratios=[1,1])
+	
+	axS = fig.add_subplot(gs[1,0])
+	axS.set_axis_off()
+	axT = fig.add_subplot(gs[0,0])
+	axT.set_axis_off()
+	imS = axS.imshow(s.S, cmap='terrain', vmin=0, vmax=1, interpolation='none')
+	imT = axT.imshow(s.T, cmap='jet', vmin=WF._Tal, vmax=1000, interpolation='none')
+	axSv = fig.add_subplot(gs[1,1])
+	axSv.set_axis_off()
+	axTv = fig.add_subplot(gs[0,1])
+	axTv.set_axis_off()
+	imSv = axSv.imshow(sv.S, cmap='coolwarm', vmin=0, vmax=2, interpolation='none')
+	imTv = axTv.imshow(sv.T, cmap='Spectral', vmin=0, vmax=500, interpolation='none')
+	ttl = axSv.text(.5, 1.05, '', transform = axS.transAxes, va='center')
+	dt_epoch = num2date(e)
+	ttl.set_text('Iteration: %d, Wind velocity = (%f, %f), epoch = %s'%(s.Iter,s.V[0],s.V[1],str(dt_epoch)))
+	# save
+	fig.savefig('out_' + str(e) + '.png')
+	fig.clf()
+	plt.close('all')
+	#plt.tight_layout(pad=0.1,w_pad=0.5,h_pad=0.5)
+	del fig, axS, axSv, axT, axTv, imS, imT, imSv, imTv, ttl
 
 # The animation function: called to produce a frame for each generation.
 def animate(i):
@@ -247,8 +272,7 @@ def getNextEpoch(currentEpoch):
 		print "Fetching data after epoch " + str(currentEpoch)
 		return sorted_epochs[index]
 	else:
-		return -1
-		#raise Exception("Processing has finished") # Bad bad bad don't do this in production
+		return -1 # Processing has finished
 
 def getMeasForEpoch(epoch):
 	global all_meas_dict
@@ -260,7 +284,7 @@ def getMeasForEpoch(epoch):
 	
 
 
-# TODO Write EnKF core here.
+# EnKF core
 
 	
 
@@ -301,6 +325,13 @@ def fromState(s,T,S,V):
 
 def reduceAdd(li):
 	return reduce(lambda x,y: x+y, li)
+
+def reduceStdSquareAdd(li,xbar):
+	s = np.empty_like(li[0])
+	for i in li:
+		s += np.square(i - xbar)
+	return s
+
 
 from subprocess import call
 def doFx(s):
@@ -357,11 +388,29 @@ def mainloop():
 	# start area small
 	#test_extents = Rect2D(-1469821,-1464277,-3680275,-3676770)
 	# start area  larger
-	test_extents = WF.Rect2D(-1473000,-1464277,-3683000,-3675000)
+	#test_extents = WF.Rect2D(-1473000,-1464277,-3683000,-3675000)
+	#test_extents = WF.Rect2D(-1473000,-1464000,-3683000,-3675000)
+	test_extents = WF.Rect2D(-1473000,-1462000,-3684000,-3672000)
+	#landsat_ndvi_extents = WF.Rect2D(-1474662.5,-1460612.5,-3688712.5,-3670587.5)
+	lndvi_extents = WF.Rect2D(-1474662.5,-1460612.5,-3688712.5,-3670587.5) # rounded for sanity.
+	# load landsat ndvi
+	lndvi_full = np.loadtxt('/g/data/r78/lsd547/waroona_landsat_ndvi_pre_fire_2.txt')
+	lndvi_cellsize = 25.0
+	ly = int((test_extents.miny-lndvi_extents.miny)/lndvi_cellsize)
+	uy = int((test_extents.maxy-lndvi_extents.maxy)/lndvi_cellsize)
+	lx = int((test_extents.minx-lndvi_extents.minx)/lndvi_cellsize)
+	ux = int((test_extents.maxx-lndvi_extents.maxx)/lndvi_cellsize)
+	
+	#lndvi_crop = ndimage.interpolation.zoom(lndvi_full[ly:uy,lx:ux],lndvi_cellsize/WF._dx,order=3)
+	
 	# Forest size (number of cells in x and y directions).
 	(nx, ny) = test_extents.shape() #1200, 1200
-	nx /= WF._dx
-	ny /= WF._dx
+	nx = int(nx // WF._dx)
+	ny = int(ny // WF._dx)
+	
+	uy = int(ly + (ny * WF._dx / lndvi_cellsize))
+	ux = int(lx + (nx * WF._dx / lndvi_cellsize))
+	lndvi_crop = ndimage.interpolation.zoom(lndvi_full[ly:uy,lx:ux],lndvi_cellsize/WF._dx,order=3)
 	
 	gausskernel43x43 = np.loadtxt('gk43.txt')
 	
@@ -511,6 +560,8 @@ def mainloop():
 
 	# subtract 20 minutes from _epoch to get pixels before hotspot
 	_epoch -= 2 * 600.0 / 86400
+	# hard set epoch
+	_epoch = 735969.0
 	
 	# sort the measurements and get the epochs of hotspots
 	sortMeas()
@@ -638,12 +689,15 @@ def mainloop():
 	# create ensemble members i.e. sigmas
 	# First state will be noisy on purpose. Try to get best fit from the noise given the measurements.
 	#sigmas = [State.generateState(test_extents,WF._Ta_stddev,WF._dx, i) for i in range(N)]
-	sigmas = [WF.State.generateState(test_extents,WF._Ta,WF._Ta_stddev,WF._dx,i,N,WF.forest_fraction,ny,nx) for i in range(N)]
 	
+	#sigmas = [WF.State.generateState(test_extents,WF._Ta,WF._Ta_stddev,WF._dx,i,N,WF.forest_fraction,ny,nx) for i in range(N)]
+	
+	sigmas = [WF.State.generateState(test_extents,WF._Ta,WF._Ta_stddev,WF._dx,i,N,lndvi_crop,ny,nx) for i in range(N)]
 		
 	tp = ThreadPool(len(sigmas))
 
-	X_mean_state = WF.State(T=reduceAdd([s.T for s in sigmas])/N, S=reduceAdd([s.S for s in sigmas])/N, V=reduceAdd([s.V for s in sigmas])/N,Iter=_Iter)
+	#X_mean_state = WF.State(T=reduceAdd([s.T for s in sigmas])/N, S=reduceAdd([s.S for s in sigmas])/N, V=reduceAdd([s.V for s in sigmas])/N,Iter=_Iter)
+	X_mean_state = 1
 	#makeSimPlotWindow(X_mean_state, sigmas[0])
 	
 	while _epoch >= 0:
@@ -680,17 +734,23 @@ def mainloop():
 		# get first lot of measurements for this epoch and check for hotspots!
 		# For now don't use MPI, use a list of starting states
 		
+		# get measurements for epoch
+		meas_at_epoch = getMeasForEpoch(_epoch)
+		num_meas = len(meas_at_epoch)
+
 		# 3) Let x = the mean state across all ensemble members (i.e. sigma using rlabbe's pyfilter terminology)
 		# inc
 		_Iter += 1
 		
 		X_mean_state = WF.State(T=reduceAdd([s.T for s in sigmas])/N, S=reduceAdd([s.S for s in sigmas])/N, V=reduceAdd([s.V for s in sigmas])/N,Iter=_Iter)
+		X_variance_state = WF.State(T=reduceStdSquareAdd([s.T for s in sigmas],X_mean_state.T)/N,
+					S=reduceStdSquareAdd([s.S for s in sigmas],X_mean_state.S)/N,
+					V=reduceStdSquareAdd([s.V for s in sigmas],X_mean_state.V)/N,
+					Iter=_Iter)
 		# plot
-		plotState(X_mean_state,sigmas,_epoch)
+		#plotState_w_sigmas(X_mean_state,sigmas,_epoch)
+		plotState(X_mean_state,X_variance_state,meas_at_epoch,_epoch)
 		# 4) let P = covariance = [sigma - x][sigma - x]^transposed, so P is NxN rank N. Use numpy.outer to computer outer product. OPTIONAL. P is huge.
-		# get measurements for epoch
-		meas_at_epoch = getMeasForEpoch(_epoch)
-		num_meas = len(meas_at_epoch)
 		
 		# 5) For each sigma, for each observation
 		#        hx_sigma_obs = hx(sigma, observation)

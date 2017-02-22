@@ -33,7 +33,7 @@ Vmean_mag = 0.2
 Vmean_dir = 1.5 * math.pi
 Vsigma_mag = 0.1
 Vsigma_dir = 0.25 * math.pi
-Vmean  = np.array([-Vmean_mag,0.0])
+Vmean  = np.array([0.0,-Vmean_mag])
 # Constants from Mendel paper
 _k = 2.1360e-1 # m^2 s^-1 K^-3
 _A = 1.8793e2 # K s^-1 # was e2
@@ -76,12 +76,15 @@ def rand_wind_old(vmean,vsigma):
 		v2 *= Vmagbound / mag
 	return v2
 
-def rand_wind(curV):
-	cur_theta = math.fmod((math.atan2(curV[1],curV[0]) + math.pi * 2), math.pi * 2)
+def rand_wind_polar(curV):
+	cur_theta = math.fmod((math.atan2(curV[0],curV[1]) + math.pi * 2), math.pi * 2)
 	cur_mag = np.linalg.norm(curV,ord=2)
 	theta = np.clip(np.random.normal(cur_theta,Vsigma_dir,1),-Vdirbound,Vdirbound)
 	r = np.clip(np.random.normal(cur_mag,Vsigma_mag,1),0,Vmagbound)
-	return np.array([r * np.cos(theta), r * np.sin(theta)]).flatten()
+	return np.array([r * np.sin(theta), r * np.cos(theta)]).flatten()
+
+def rand_wind(curV):
+	return np.clip(curV + np.random.normal(0,0.01,2),-Vmagbound,Vmagbound)
 
 class State(object):
 	def __init__(self, **kwds):
@@ -159,13 +162,16 @@ class State(object):
 		T[iy-ks:iy+ks+1,ix-ks:ix+ks+1] += temp * gausskernel43x43 / np.amax(gausskernel43x43)
 	#@profile
 	@classmethod
-	def generateState(cls,extents,Ta,Ta_stddev,dx,state_id,N,forest_fraction,ny,nx):
+	#def generateState(cls,extents,Ta,Ta_stddev,dx,state_id,N,forest_fraction,ny,nx):
+	def generateState(cls,extents,Ta,Ta_stddev,dx,state_id,N,forest_map,ny,nx):
 		# Initialize the forest grid.
 		
 		#S  = np.ones((ny, nx))
 		#S[1:ny-1, 1:nx-1] = np.random.randint(0, 2, size=(ny-2, nx-2))
 		#S[1:ny-1, 1:nx-1] = ndimage.filters.gaussian_filter(np.random.random(size=(ny-2, nx-2)) < forest_fraction,2,mode='nearest')
-		S = ndimage.filters.gaussian_filter(np.clip(np.random.normal(forest_fraction,0.1,(ny,nx)),0,1),2,mode='nearest')
+		#S = ndimage.filters.gaussian_filter(np.clip(np.random.normal(forest_fraction,0.1,(ny,nx)),0,1),2,mode='nearest')
+		
+		S = np.copy(forest_map)
 		# Initialize the ambient temperature grid.
 		#T  = np.ones((ny, nx)) * _Ta + ndimage.filters.gaussian_filter(np.absolute(np.random.normal(0,Ta_stddev,(ny,nx))),4,mode='nearest')
 		

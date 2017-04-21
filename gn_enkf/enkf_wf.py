@@ -200,7 +200,7 @@ def plotState_w_sigmas(s,sigmas_,e):
 	plt.close('all')
 	del fig, axS, axS_, axT, axT_, imS, imT, imS_, imT_, ttl
 
-def plotState(s,sv,mae,e):
+def plotState(s,sv,mae,backdrop,e):
 	fig = plt.figure(figsize=(12, 12),dpi=72)
 	gs = gridspec.GridSpec(2,2) #, width_ratios=[1,1])
 	
@@ -216,7 +216,7 @@ def plotState(s,sv,mae,e):
 	axTv.set_axis_off()
 	imSv = axSv.imshow(sv.S, cmap='coolwarm', vmin=0, vmax=2, interpolation='none')
 	imTv = axTv.imshow(sv.T, cmap='Spectral', vmin=0, vmax=500, interpolation='none')
-	ttl = axSv.text(.5, 1.05, '', transform = axS.transAxes, va='center')
+	ttl = axT.text(.5, 1.05, '', transform = axT.transAxes, va='center')
 	dt_epoch = num2date(e)
 	ttl.set_text('Iteration: %d, Wind velocity = (%f, %f), epoch = %s'%(s.Iter,s.V[0],s.V[1],str(dt_epoch)))
 	# save
@@ -395,6 +395,7 @@ def mainloop():
 	lndvi_extents = WF.Rect2D(-1474662.5,-1460612.5,-3688712.5,-3670587.5) # rounded for sanity.
 	# load landsat ndvi
 	lndvi_full = np.loadtxt('/g/data/r78/lsd547/waroona_landsat_ndvi_pre_fire_2.txt')
+	lndvi_after_full = np.loadtxt('/g/data/r78/lsd547/waroona_landsat_ndvi_pre_fire_2.txt')
 	lndvi_cellsize = 25.0
 	ly = int((test_extents.miny-lndvi_extents.miny)/lndvi_cellsize)
 	uy = int((test_extents.maxy-lndvi_extents.maxy)/lndvi_cellsize)
@@ -411,6 +412,7 @@ def mainloop():
 	uy = int(ly + (ny * WF._dx / lndvi_cellsize))
 	ux = int(lx + (nx * WF._dx / lndvi_cellsize))
 	lndvi_crop = ndimage.interpolation.zoom(lndvi_full[ly:uy,lx:ux],lndvi_cellsize/WF._dx,order=3)
+	lndvi_after_crop = ndimage.interpolation.zoom(lndvi_after_full[ly:uy,lx:ux],lndvi_cellsize/WF._dx,order=3)
 	
 	gausskernel43x43 = np.loadtxt('gk43.txt')
 	
@@ -749,7 +751,7 @@ def mainloop():
 					Iter=_Iter)
 		# plot
 		#plotState_w_sigmas(X_mean_state,sigmas,_epoch)
-		plotState(X_mean_state,X_variance_state,meas_at_epoch,_epoch)
+		plotState(X_mean_state,X_variance_state,meas_at_epoch,lndvi_after_crop,_epoch)
 		# 4) let P = covariance = [sigma - x][sigma - x]^transposed, so P is NxN rank N. Use numpy.outer to computer outer product. OPTIONAL. P is huge.
 		
 		# 5) For each sigma, for each observation

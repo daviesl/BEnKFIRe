@@ -15,7 +15,11 @@ from sklearn.ensemble import AdaBoostClassifier
 from sklearn.ensemble import GradientBoostingClassifier
 import sys
 import math
+from os.path import join, exists
 
+
+def data_path(fn):
+	return join('csv_data',fn)
 
 # Globals to use in classifier
 class FireRegion(object):
@@ -28,7 +32,7 @@ class FireRegion(object):
 		self.dnbr_area_extents=dnbr_area_extents
 		self.fire_after=fire_after
 		self.nofire_before=nofire_before
-		self.hs_h8 = np.loadtxt('dnbr_'+self.hs_h8_file,skiprows=0,delimiter=',')
+		self.hs_h8 = np.loadtxt(data_path('dnbr_'+self.hs_h8_file),skiprows=0,delimiter=',')
 		self.dnbr_dir = '/g/data/r78/lsd547/landsat_dnbr/' # /local/r78
 		self.dnbr_area_fn=self.dnbr_dir+self.dnbr_fn
 		self.dnbr_area=np.loadtxt(self.dnbr_area_fn)
@@ -224,9 +228,12 @@ if action=='classify2':
 		Ytrain = np.concatenate((train_rgn.Y,train_rgn2.Y,train_rgn3.Y),axis=0)
 		Wtrain = np.concatenate((train_rgn.W,train_rgn2.W,train_rgn3.W),axis=0)
 		
-		Xtest = np.concatenate((test_rgn.X,test_rgn2.X,test_rgn3.X),axis=0)
-		Ytest = np.concatenate((test_rgn.Y,test_rgn2.Y,test_rgn3.Y),axis=0)
-		Wtest = np.concatenate((test_rgn.W,test_rgn2.W,test_rgn3.W),axis=0)
+		#Xtest = np.concatenate((test_rgn.X,test_rgn2.X,test_rgn3.X),axis=0)
+		#Ytest = np.concatenate((test_rgn.Y,test_rgn2.Y,test_rgn3.Y),axis=0)
+		#Wtest = np.concatenate((test_rgn.W,test_rgn2.W,test_rgn3.W),axis=0)
+		Xtest = test_rgn3.X
+		Ytest = test_rgn3.Y
+		Wtest = test_rgn3.W
 
 	print "Train size " + str(len(Xtrain)) + " " + str(len(Ytrain))
 
@@ -264,6 +271,9 @@ if action=='classify2':
 	#print Ypred_class_prob
 	Ypred_0 = Ypred_class_prob[:,0]
 	Ypred_1 = Ypred_class_prob[:,1]
+
+	np.savetxt('tas_train_class.csv',Ytrain)
+	np.savetxt('tas_test_class.csv',Ypred_classification)
 
 
 	print 'Number of hotspots classified as fire (Positive class): ' + str(np.sum(Ytest)) + " vs predicted " + str(np.sum(Ypred_classification)) + " or ll weighted " + str(np.sum(Ypred_1))

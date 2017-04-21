@@ -8,7 +8,8 @@ from matplotlib.dates import datestr2num, num2date
 
 dr = '/g/data/r78/lsd547/landsat_dnbr/'
 #fn = 'tas_landsat_dnbr.txt'
-fn = 'sa_regional_subset_landsat_dnbr.txt'
+fn = 'waroona_landsat_dnbr.txt'
+#fn = 'sa_regional_subset_landsat_dnbr.txt'
 #fn = 'dnbr_SA_regional_20151201_31_H8_ALBERS.csv'
 
 a = np.loadtxt(dr+fn)

@@ -9,8 +9,12 @@ from matplotlib import colors
 from matplotlib.dates import datestr2num, num2date
 from datetime import datetime
 import bisect
+from os.path import join, exists
 
 i=0
+
+def data_path(fn):
+	return join('csv_data',fn)
 
 #WA
 #dr='/g/data/r78/lsd547/H8/WA2/'
@@ -434,10 +438,10 @@ def floatOrBlank(st):
 #MODIS/VIIRS hotspots
 
 # WA
-#hs_MODIS = np.loadtxt(hs_MODIS_file,skiprows=1,delimiter=',',usecols=(0,1,19,20,13,15,26,27,28,29,30,31,32), converters={15:sv2num,19:utc2num,20:utc2num,28:floatOrBlank,29:utc2num,30:floatOrBlank,31:floatOrBlank}) # X, Y, start_dt, end_dt, id, satellite_, lat, lon, temp_K, datetime, power, confidence, age_hours 
+#hs_MODIS = np.loadtxt(data_path(hs_MODIS_file),skiprows=1,delimiter=',',usecols=(0,1,19,20,13,15,26,27,28,29,30,31,32), converters={15:sv2num,19:utc2num,20:utc2num,28:floatOrBlank,29:utc2num,30:floatOrBlank,31:floatOrBlank}) # X, Y, start_dt, end_dt, id, satellite_, lat, lon, temp_K, datetime, power, confidence, age_hours 
 
 modis_file_cols = (0,1,8,9,2,4,15,16,17,18,19,20,21) # TAS
-hs_MODIS = np.loadtxt(hs_MODIS_file,skiprows=1,delimiter=',',usecols=modis_file_cols, converters={4:sv2num,8:utc2num,9:utc2num,17:floatOrBlank,18:utc2num,19:floatOrBlank,20:floatOrBlank}) # X, Y, start_dt, end_dt, id, satellite_, lat, lon, temp_K, datetime, power, confidence, age_hours 
+hs_MODIS = np.loadtxt(data_path(hs_MODIS_file),skiprows=1,delimiter=',',usecols=modis_file_cols, converters={4:sv2num,8:utc2num,9:utc2num,17:floatOrBlank,18:utc2num,19:floatOrBlank,20:floatOrBlank}) # X, Y, start_dt, end_dt, id, satellite_, lat, lon, temp_K, datetime, power, confidence, age_hours 
 if hs_MODIS.size > 0:
 	hs_MODIS[hs_MODIS[:,2].argsort()] #3rd column is start_dt
 	hs_MODIS_radius = 0.5 * 500.0 / 1000.0
@@ -541,12 +545,12 @@ if hs_MODIS.size > 0:
 			hs_MODIS[i,hs_cols + 1] = -9999
 			continue
 	
-	np.savetxt('dnbr_m_'+hs_MODIS_file,hs_MODIS,delimiter=',')
-	np.savetxt('dnbr_synth_m_'+hs_MODIS_file,np.array(synth_MODIS),delimiter=',')
+	np.savetxt(data_path('dnbr_m_'+hs_MODIS_file),hs_MODIS,delimiter=',')
+	np.savetxt(data_path('dnbr_synth_m_'+hs_MODIS_file),np.array(synth_MODIS),delimiter=',')
 	
 # H8 Hotspots
 # X,Y,Datetime,Lat,Lon,FRP(mw),Firesize(km^2),temp(k),Category,Description
-hs_h8 = np.loadtxt(hs_h8_file,skiprows=1,delimiter=',',usecols=(0,1,2,3,4,5,6,7,8),converters={2:datestr2num})
+hs_h8 = np.loadtxt(data_path(hs_h8_file),skiprows=1,delimiter=',',usecols=(0,1,2,3,4,5,6,7,8),converters={2:datestr2num})
 hs_h8[hs_h8[:,2].argsort()] #3rd column is utc time
 (hs_rows,hs_cols) = hs_h8.shape
 hs_h8 = np.concatenate((hs_h8,np.zeros((hs_rows,23))),axis=1)
@@ -627,7 +631,7 @@ for i in xrange(hs_rows):
 		#hs_h8[i,10] = -9999
 		continue
 
-np.savetxt('dnbr_'+hs_h8_file,hs_h8,delimiter=',')
+np.savetxt(data_path('dnbr_'+hs_h8_file),hs_h8,delimiter=',')
 			
 			
 	

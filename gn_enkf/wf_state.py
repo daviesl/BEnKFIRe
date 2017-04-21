@@ -33,7 +33,7 @@ Vmean_mag = 0.2
 Vmean_dir = 1.5 * math.pi
 Vsigma_mag = 0.1
 Vsigma_dir = 0.25 * math.pi
-Vmean  = np.array([0.0,-Vmean_mag])
+Vmean  = np.array([0.0,Vmean_mag])
 # Constants from Mendel paper
 _k = 2.1360e-1 # m^2 s^-1 K^-3
 _A = 1.8793e2 # K s^-1 # was e2
@@ -84,7 +84,15 @@ def rand_wind_polar(curV):
 	return np.array([r * np.sin(theta), r * np.cos(theta)]).flatten()
 
 def rand_wind(curV):
-	return np.clip(curV + np.random.normal(0,0.01,2),-Vmagbound,Vmagbound)
+	#return np.clip(curV + np.random.normal(0,0.01,2),-Vmagbound,Vmagbound)
+	Vmean_const = np.array([0.0,0.2])
+	Vsm_c = 0.05
+	Vsm_c2 = 0.01
+	Vupper = Vmean_const + Vsm_c
+	Vlower = Vmean_const - Vsm_c
+	return np.array([np.clip(np.random.normal(curV[0],Vsm_c2,1),Vlower[0],Vupper[0]),
+			np.clip(np.random.normal(curV[1],Vsm_c2,1),Vlower[1],Vupper[1])])
+	
 
 class State(object):
 	def __init__(self, **kwds):
